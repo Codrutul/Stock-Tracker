@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    .scrollbar-hidden::-webkit-scrollbar {
+        display: none;
+    }
+
+    .scrollbar-hidden {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .trash-icon:hover {
+        fill: red;
+    }
+
+    .edit-icon:hover {
+        fill: limegreen;
+    }
+
+    .news-icon:hover {
+        color: dodgerblue;
+    }
+
+}
+
