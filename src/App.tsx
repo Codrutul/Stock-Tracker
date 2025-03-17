@@ -1,4 +1,4 @@
-import {useState, useEffect} from "react";
+import {useEffect, useState} from "react";
 import "./globals.css";
 import Button_new from "./components/Button_new.tsx";
 import Dark_mode_icon from "./components/Dark_mode_icon.tsx";
@@ -10,6 +10,8 @@ import StockRepo, {stockDataBase} from "./classes/StockRepo.ts";
 import Stock from "./classes/Stock.ts";
 import CompanyHeadline from "./components/CompanyHeadline.tsx";
 import Notification from "./components/Notification.tsx";
+import Modal from "./components/Modal.tsx";
+import AdvancedSearch from "./components/AdvancedSearch.tsx";
 
 interface Option {
     value: string;
@@ -74,6 +76,8 @@ function App() {
         isVisible: false,
         type: 'error' as 'error' | 'success' | 'info'
     });
+    const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
+    const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
 
     const handleSearchChange = (newText: string) => {
         setSearchValue(newText);
@@ -152,6 +156,10 @@ function App() {
         setSortOption(sortOption);
     };
 
+    const handleAdvancedSearchApply = (minPrice: number, maxPrice: number) => {
+        setPriceRange({ min: minPrice, max: maxPrice });
+    };
+
     // Function to sort stocks based on selected option
     const sortStocks = (stocks: Stock[]): Stock[] => {
         const stocksCopy = [...stocks];
@@ -181,11 +189,17 @@ function App() {
     const getFilteredAndSortedStocks = () => {
         let filteredStocks: Stock[];
 
+        // First filter by industry
         if (filterValue === "All") {
             filteredStocks = stockList.getStocks();
         } else {
             filteredStocks = stockList.getStocks().filter(stock => stock.industry === filterValue);
         }
+
+        // Then filter by price range
+        filteredStocks = filteredStocks.filter(
+            stock => stock.price >= priceRange.min && stock.price <= priceRange.max
+        );
 
         const sortedStocks = sortStocks(filteredStocks);
         return new StockRepo(sortedStocks);
@@ -195,19 +209,19 @@ function App() {
     // or when the stock list changes
     useEffect(() => {
         const filteredAndSortedStocks = getFilteredAndSortedStocks().getStocks();
-        
+
         // If we have stocks but nothing is selected, select the first one
         if (filteredAndSortedStocks.length > 0 && !selectedStock) {
             setSelectedStock(filteredAndSortedStocks[0]);
-        } 
+        }
         // If we have no stocks, make sure nothing is selected
         else if (filteredAndSortedStocks.length === 0 && selectedStock) {
             setSelectedStock(null);
         }
-        // If the currently selected stock is not in the filtered list anymore,
+            // If the currently selected stock is not in the filtered list anymore,
         // select the first one from the filtered list
-        else if (filteredAndSortedStocks.length > 0 && selectedStock && 
-                !filteredAndSortedStocks.some(stock => stock.name === selectedStock.name)) {
+        else if (filteredAndSortedStocks.length > 0 && selectedStock &&
+            !filteredAndSortedStocks.some(stock => stock.name === selectedStock.name)) {
             setSelectedStock(filteredAndSortedStocks[0]);
         }
     }, [stockList, filterValue, sortOption]);
@@ -249,12 +263,13 @@ function App() {
         </div>
 
         <div className="flex flex-col items-start justify-start">
-            <div className="flex flex-row gap-96 w-full px-8">
+            <div className="flex flex-row gap-72 w-full px-8">
                 <div className="flex flex-col items-start justify-start py-4 gap-2">
                     <EditableHeader initial_text="My Portfolio"/>
                     <DropDown functionality="Sort by:" options={optionsSort} onChange={handleSortChange}/>
-                    <div className="flex flex-row">
+                    <div className="flex flex-row justify-end gap-3.5">
                         <DropDown functionality="Filter by:" options={optionsFilter} onChange={handleFilterChange}/>
+                        <Button_new name="Advanced Search" onClick={() => setIsAdvancedSearchOpen(true)}/>
                     </div>
                 </div>
 
@@ -263,6 +278,20 @@ function App() {
             <ScrollableList stockRepo={getFilteredAndSortedStocks()} onRemove={handleRemoveStock}
                             onSelect={handleSelectStock}/>
         </div>
+
+        {/* Add the Modal component */}
+        <Modal
+            isOpen={isAdvancedSearchOpen}
+            onClose={() => setIsAdvancedSearchOpen(false)}
+            title="Advanced Search"
+        >
+            <AdvancedSearch
+                onApply={handleAdvancedSearchApply}
+                onClose={() => setIsAdvancedSearchOpen(false)}
+                currentMinPrice={priceRange.min}
+                currentMaxPrice={priceRange.max}
+            />
+        </Modal>
     </div>
 }
 

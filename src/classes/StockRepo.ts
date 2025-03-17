@@ -43,16 +43,20 @@ export default class StockRepo {
         }
         return this.list.filter(s => s.industry === industry);
     }
+
+    getStocksPriceRange(min: number, max: number) {
+        return this.list.filter(s => s.price >= min && s.price <= max);
+    }
 }
 
 const stockDataBase = new StockRepo()
 
 // Technology Companies
 stockDataBase.appendStock(new Stock(
-    "Apple", 
-    193, 
-    0, 
-    -5, 
+    "Apple",
+    193,
+    0,
+    -5,
     "src/assets/apple.png",
     2930000000000, // Market cap: $2.93T
     0.96, // Dividend: $0.96
@@ -62,10 +66,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Microsoft", 
-    406, 
-    0, 
-    5, 
+    "Microsoft",
+    406,
+    0,
+    5,
     "src/assets/microsoft.png",
     3050000000000, // Market cap: $3.05T
     2.72, // Dividend: $2.72
@@ -75,10 +79,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Google", 
-    168, 
-    0, 
-    10, 
+    "Google",
+    168,
+    0,
+    10,
     "src/assets/google.png",
     2080000000000, // Market cap: $2.08T
     0, // No dividend
@@ -88,10 +92,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Meta", 
-    489, 
-    0, 
-    15, 
+    "Meta",
+    489,
+    0,
+    15,
     "src/assets/meta.png",
     1250000000000, // Market cap: $1.25T
     0, // No dividend
@@ -101,10 +105,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "NVIDIA", 
-    878, 
-    0, 
-    12, 
+    "NVIDIA",
+    878,
+    0,
+    12,
     "src/assets/nvidia.png",
     2160000000000, // Market cap: $2.16T
     0.16, // Dividend: $0.16
@@ -115,10 +119,10 @@ stockDataBase.appendStock(new Stock(
 
 // Automotive Companies
 stockDataBase.appendStock(new Stock(
-    "Tesla", 
-    177, 
-    0, 
-    -20, 
+    "Tesla",
+    177,
+    0,
+    -20,
     "src/assets/tesla.png",
     565000000000, // Market cap: $565B
     0, // No dividend
@@ -128,10 +132,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Ford", 
-    12.04, 
-    0, 
-    -15, 
+    "Ford",
+    12.04,
+    0,
+    -15,
     "src/assets/ford.png",
     47900000000, // Market cap: $47.9B
     0.60, // Dividend: $0.60
@@ -141,10 +145,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "GM", 
-    44.38, 
-    0, 
-    -8, 
+    "GM",
+    44.38,
+    0,
+    -8,
     "src/assets/gm.png",
     51200000000, // Market cap: $51.2B
     0.48, // Dividend: $0.48
@@ -154,10 +158,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Toyota", 
-    189.71, 
-    0, 
-    3, 
+    "Toyota",
+    189.71,
+    0,
+    3,
     "src/assets/toyota.png",
     258000000000, // Market cap: $258B
     2.80, // Dividend: $2.80
@@ -168,10 +172,10 @@ stockDataBase.appendStock(new Stock(
 
 // Finance Companies
 stockDataBase.appendStock(new Stock(
-    "JPMorgan", 
-    199.95, 
-    0, 
-    8, 
+    "JPMorgan",
+    199.95,
+    0,
+    8,
     "src/assets/jpmorgan.png",
     574000000000, // Market cap: $574B
     4.00, // Dividend: $4.00
@@ -181,10 +185,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Bank of America", 
-    38.24, 
-    0, 
-    2, 
+    "Bank of America",
+    38.24,
+    0,
+    2,
     "src/assets/bofa.png",
     302000000000, // Market cap: $302B
     0.96, // Dividend: $0.96
@@ -194,10 +198,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Visa", 
-    275.93, 
-    0, 
-    4, 
+    "Visa",
+    275.93,
+    0,
+    4,
     "src/assets/visa.png",
     555000000000, // Market cap: $555B
     2.08, // Dividend: $2.08
@@ -207,10 +211,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "PayPal", 
-    62.30, 
-    0, 
-    -12, 
+    "PayPal",
+    62.30,
+    0,
+    -12,
     "src/assets/paypal.png",
     66100000000, // Market cap: $66.1B
     0, // No dividend
@@ -221,10 +225,10 @@ stockDataBase.appendStock(new Stock(
 
 // Healthcare Companies
 stockDataBase.appendStock(new Stock(
-    "Johnson & Johnson", 
-    147.52, 
-    0, 
-    -10, 
+    "Johnson & Johnson",
+    147.52,
+    0,
+    -10,
     "src/assets/jnj.png",
     356000000000, // Market cap: $356B
     4.76, // Dividend: $4.76
@@ -234,10 +238,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Pfizer", 
-    28.79, 
-    0, 
-    -25, 
+    "Pfizer",
+    28.79,
+    0,
+    -25,
     "src/assets/pfizer.png",
     163000000000, // Market cap: $163B
     1.64, // Dividend: $1.64
@@ -247,10 +251,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "UnitedHealth", 
-    528.56, 
-    0, 
-    7, 
+    "UnitedHealth",
+    528.56,
+    0,
+    7,
     "src/assets/unitedhealth.png",
     478000000000, // Market cap: $478B
     7.52, // Dividend: $7.52
@@ -261,10 +265,10 @@ stockDataBase.appendStock(new Stock(
 
 // Energy Companies
 stockDataBase.appendStock(new Stock(
-    "ExxonMobil", 
-    119.92, 
-    0, 
-    2, 
+    "ExxonMobil",
+    119.92,
+    0,
+    2,
     "src/assets/exxon.png",
     474000000000, // Market cap: $474B
     3.80, // Dividend: $3.80
@@ -274,10 +278,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Chevron", 
-    154.66, 
-    0, 
-    -5, 
+    "Chevron",
+    154.66,
+    0,
+    -5,
     "src/assets/chevron.png",
     286000000000, // Market cap: $286B
     6.04, // Dividend: $6.04
@@ -288,10 +292,10 @@ stockDataBase.appendStock(new Stock(
 
 // Consumer Cyclical
 stockDataBase.appendStock(new Stock(
-    "Amazon", 
-    178.15, 
-    0, 
-    25, 
+    "Amazon",
+    178.15,
+    0,
+    25,
     "src/assets/amazon.png",
     1860000000000, // Market cap: $1.86T
     0, // No dividend
@@ -301,10 +305,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Walmart", 
-    60.46, 
-    0, 
-    10, 
+    "Walmart",
+    60.46,
+    0,
+    10,
     "src/assets/walmart.png",
     488000000000, // Market cap: $488B
     0.88, // Dividend: $0.88
@@ -314,10 +318,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Home Depot", 
-    342.87, 
-    0, 
-    5, 
+    "Home Depot",
+    342.87,
+    0,
+    5,
     "src/assets/homedepot.png",
     339000000000, // Market cap: $339B
     9.24, // Dividend: $9.24
@@ -328,10 +332,10 @@ stockDataBase.appendStock(new Stock(
 
 // Entertainment
 stockDataBase.appendStock(new Stock(
-    "Netflix", 
-    628.38, 
-    0, 
-    30, 
+    "Netflix",
+    628.38,
+    0,
+    30,
     "src/assets/netflix.png",
     271000000000, // Market cap: $271B
     0, // No dividend
@@ -341,10 +345,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Disney", 
-    90.35, 
-    0, 
-    -8, 
+    "Disney",
+    90.35,
+    0,
+    -8,
     "src/assets/disney.png",
     165000000000, // Market cap: $165B
     0.80, // Dividend: $0.80
@@ -354,10 +358,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Spotify", 
-    304.13, 
-    0, 
-    40, 
+    "Spotify",
+    304.13,
+    0,
+    40,
     "src/assets/spotify.png",
     60300000000, // Market cap: $60.3B
     0, // No dividend
@@ -368,10 +372,10 @@ stockDataBase.appendStock(new Stock(
 
 // Manufacturing
 stockDataBase.appendStock(new Stock(
-    "Caterpillar", 
-    347.30, 
-    0, 
-    12, 
+    "Caterpillar",
+    347.30,
+    0,
+    12,
     "src/assets/caterpillar.png",
     169000000000, // Market cap: $169B
     5.20, // Dividend: $5.20
@@ -381,10 +385,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "3M", 
-    91.94, 
-    0, 
-    -17, 
+    "3M",
+    91.94,
+    0,
+    -17,
     "src/assets/3m.png",
     50800000000, // Market cap: $50.8B
     6.12, // Dividend: $6.12
@@ -395,10 +399,10 @@ stockDataBase.appendStock(new Stock(
 
 // Agriculture
 stockDataBase.appendStock(new Stock(
-    "Archer-Daniels-Midland", 
-    62.19, 
-    0, 
-    -3, 
+    "Archer-Daniels-Midland",
+    62.19,
+    0,
+    -3,
     "src/assets/adm.png",
     31600000000, // Market cap: $31.6B
     1.80, // Dividend: $1.80
@@ -408,10 +412,10 @@ stockDataBase.appendStock(new Stock(
 ))
 
 stockDataBase.appendStock(new Stock(
-    "Deere & Company", 
-    386.62, 
-    0, 
-    8, 
+    "Deere & Company",
+    386.62,
+    0,
+    8,
     "src/assets/deere.png",
     106000000000, // Market cap: $106B
     5.00, // Dividend: $5.00

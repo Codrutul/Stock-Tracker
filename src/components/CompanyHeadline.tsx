@@ -32,11 +32,11 @@ export default function CompanyHeadline({selectedStock}: CompanyHeadlineProps) {
 
     return (
         <div className="flex flex-col items-start ml-7 mt-4 w-[450px]">
-            <h1 className="text-5xl font-bold mb-2 w-full">
+            <h1 className="text-5xl mb-2 w-full">
                 {selectedStock ? selectedStock.name : "No company selected"}
             </h1>
 
-            <div className="grid grid-cols-2 gap-y-3 gap-x-8 w-full text-sm">
+            <div className="grid grid-cols-2 gap-y-3 gap-x-8 w-full text-sm mt-2.5">
                 {/* Row 1 */}
                 <div>
                     <span className="font-normal">Market cap: </span>
