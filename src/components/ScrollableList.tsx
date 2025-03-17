@@ -1,5 +1,4 @@
 import TrashIcon from "./TrashIcon.tsx";
-import EditIcon from "./EditIcon.tsx";
 import NewsIcon from "./NewsIcon.tsx";
 import PriceIcon from "./PriceIcon.tsx";
 import WalletIcon from "./WalletIcon.tsx";
@@ -7,17 +6,75 @@ import RedArrowIcon from "./RedArrowIcon.tsx";
 import GreenArrowIcon from "./GreenArrowIcon.tsx";
 import StockRepo from "../classes/StockRepo.ts";
 import Stock from "../classes/Stock.ts";
+import Chart from "./Chart.tsx";
+import SharesInput from "./SharesInput.tsx";
+import ButtonGreen from "./ButtonGreen.tsx";
+import ButtonRed from "./ButtonRed.tsx";
+import Button_new from "./Button_new.tsx";
+import {useState, KeyboardEvent, ChangeEvent} from "react";
 
 interface Properties {
     stockRepo: StockRepo
     darkMode?: boolean
     onRemove: (stock: Stock) => void
-
-
+    onSelect: (stock: Stock) => void
 }
 
-export default function ScrollableList({stockRepo, onRemove}: Properties) {
+export default function ScrollableList({stockRepo, onRemove, onSelect}: Properties) {
+    const [editingStockIndex, setEditingStockIndex] = useState<number | null>(null);
+    const [editedAmount, setEditedAmount] = useState<string>("");
 
+    const handleEditClick = (index: number, amount: number, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent the stock from being selected when clicking edit
+        setEditingStockIndex(index);
+        setEditedAmount(amount.toString());
+    };
+
+    const handleAmountChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setEditedAmount(e.target.value);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, stock: Stock) => {
+        if (e.key === 'Enter') {
+            const newAmount = parseFloat(editedAmount);
+            if (!isNaN(newAmount) && newAmount >= 0) {
+                // Create a new Stock object with the updated amount
+                const updatedStock = new Stock(
+                    stock.name,
+                    stock.price,
+                    newAmount,
+                    stock.change,
+                    stock.image_src,
+                    stock.marketCap,
+                    stock.dividendAmount,
+                    stock.industry,
+                    stock.headquarters,
+                    stock.peRatio
+                );
+                
+                // Replace the old stock with the updated one at the same index
+                const stocks = [...stockRepo.getStocks()];
+                const stockIndex = stocks.findIndex(s => s.name === stock.name);
+                
+                if (stockIndex !== -1) {
+                    stocks[stockIndex] = updatedStock;
+                    // Update the stockRepo (assuming it has a method to update a stock)
+                    stock.updateAmount(newAmount);
+                    onSelect(stock); // Update the selected stock with new values
+                }
+                
+                // Exit edit mode
+                setEditingStockIndex(null);
+            }
+        } else if (e.key === 'Escape') {
+            // Cancel editing
+            setEditingStockIndex(null);
+        }
+    };
+
+    const handleStockClick = (stock: Stock) => {
+        onSelect(stock);
+    };
 
     return (
         <div
@@ -28,14 +85,14 @@ export default function ScrollableList({stockRepo, onRemove}: Properties) {
                     {[...stockRepo.getStocks()].map((s, index: number) => (
                         <div
                             key={index}
-                            onClick={() => {
-                            }}
-                            className="bg-white p-4 rounded-lg flex justify-between items-center border-2 border-transparent hover:border-blue-500 transition-colors duration-300 ease-in-out">
+                            onClick={() => handleStockClick(s)}
+                            className="bg-white p-4 rounded-lg flex justify-between items-center border-2 border-transparent hover:border-blue-500 transition-colors duration-300 ease-in-out cursor-pointer"
+                        >
                             <div className="flex flex-row justify-start items-center gap-6 font-semibold text-xl">
 
                                 <img width="53"
                                      src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRCvh-j7HsTHJ8ZckknAoiZMx9VcFmsFkv72g&s"
-                                     alt="Compnay Logo"></img>
+                                     alt="Company Logo"></img>
                                 <span>{s.name} </span>
                                 <span className="flex items-center flex-row">
                                     <PriceIcon></PriceIcon>
@@ -45,27 +102,68 @@ export default function ScrollableList({stockRepo, onRemove}: Properties) {
                                     <GreenArrowIcon/> : <RedArrowIcon/>}{s.change}%</span>
                                 <span className="flex items-center flex-row">
                                     <WalletIcon></WalletIcon>
-                                    {s.amount_owned}$</span>
+                                    {editingStockIndex === index ? (
+                                        <input
+                                            type="number"
+                                            className="w-20 px-2 py-1 border border-gray-300 rounded"
+                                            value={editedAmount}
+                                            onChange={handleAmountChange}
+                                            onKeyDown={(e) => handleKeyDown(e, s)}
+                                            onClick={(e) => e.stopPropagation()} // Prevent triggering parent click
+                                            autoFocus
+                                        />
+                                    ) : (
+                                        `${s.amount_owned}$`
+                                    )}
+                                </span>
 
                             </div>
                             <div className="flex justify-end items-center gap-4">
-                                <a> <NewsIcon/> </a>
-                                <a> <EditIcon/> </a>
-                                <a onClick={() => onRemove(s)}> <TrashIcon/> </a>
-
+                                <a 
+                                    target="_blank" 
+                                    href={"https://businessinsider.com/" + s.name.toLowerCase()}
+                                    onClick={(e) => e.stopPropagation()} // Prevent triggering parent click
+                                > 
+                                    <NewsIcon /> 
+                                </a>
+                                <a onClick={(e) => handleEditClick(index, s.amount_owned, e)}> 
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        viewBox="0 0 24 24"
+                                        fill={editingStockIndex === index ? "#22c55e" : "#000000"}
+                                        className="bi bi-pencil cursor-pointer edit-icon transition-colors duration-300 ease-in-out"
+                                        width="30"
+                                        height="30"
+                                    >
+                                        <path
+                                            fillRule="evenodd"
+                                            clipRule="evenodd"
+                                            d="M20.8477 1.87868C19.6761 0.707109 17.7766 0.707105 16.605 1.87868L2.44744 16.0363C2.02864 16.4551 1.74317 16.9885 1.62702 17.5692L1.03995 20.5046C0.760062 21.904 1.9939 23.1379 3.39334 22.858L6.32868 22.2709C6.90945 22.1548 7.44285 21.8693 7.86165 21.4505L22.0192 7.29289C23.1908 6.12132 23.1908 4.22183 22.0192 3.05025L20.8477 1.87868ZM18.0192 3.29289C18.4098 2.90237 19.0429 2.90237 19.4335 3.29289L20.605 4.46447C20.9956 4.85499 20.9956 5.48815 20.605 5.87868L17.9334 8.55027L15.3477 5.96448L18.0192 3.29289ZM13.9334 7.3787L3.86165 17.4505C3.72205 17.5901 3.6269 17.7679 3.58818 17.9615L3.00111 20.8968L5.93645 20.3097C6.13004 20.271 6.30784 20.1759 6.44744 20.0363L16.5192 9.96448L13.9334 7.3787Z"
+                                        />
+                                    </svg>
+                                </a>
+                                <a onClick={(e) => { e.stopPropagation(); onRemove(s); }}> 
+                                    <TrashIcon/> 
+                                </a>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
-            <div className="fit-content w-full p-4 flex flex-col  ">
-                <span className="text-5xl">Company name</span>
-                // continue from here
-                // the company name should be more up and be dispayed when you press on a item from the list
-
-
+            <div className="flex flex-col">
+                <Chart></Chart>
+                <div className="flex flex-row justify-between  mt-4">
+                    <SharesInput></SharesInput>
+                    <div className="flex flex-row gap-4">
+                        <ButtonGreen text="Buy"/>
+                        <ButtonRed text="Sell"/>
+                    </div>
+                </div>
+                <div className="flex flex-row justify-end mt-4">
+                    <Button_new name="Analyse Risk" onClick={() => {
+                    }}></Button_new>
+                </div>
             </div>
-
         </div>
     );
 }
