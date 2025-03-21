@@ -311,7 +311,7 @@ function App() {
               options={optionsSort}
               onChange={handleSortChange}
             />
-            <div className="flex flex-row justify-end gap-3.5">
+            <div className="flex flex-row items-center gap-3.5">
               <DropDown
                 functionality="Filter by:"
                 options={optionsFilter}
@@ -321,8 +321,10 @@ function App() {
                 name="Advanced Search"
                 onClick={() => setIsAdvancedSearchOpen(true)}
               />
-              <ChartIcon />
-              <ChartLineIcon></ChartLineIcon>
+              <div className="flex items-center gap-2 ml-1">
+                <ChartIcon onClick={() => {/* Add your chart functionality */}} />
+                <ChartLineIcon onClick={() => {/* Add your line chart functionality */}} />
+              </div>
             </div>
           </div>
 
