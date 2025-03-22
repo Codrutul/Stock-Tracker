@@ -6,11 +6,6 @@ import RedArrowIcon from "./RedArrowIcon.tsx";
 import GreenArrowIcon from "./GreenArrowIcon.tsx";
 import StockRepo from "../classes/StockRepo.ts";
 import Stock from "../classes/Stock.ts";
-import Chart from "./Chart.tsx";
-import SharesInput from "./SharesInput.tsx";
-import ButtonGreen from "./ButtonGreen.tsx";
-import ButtonRed from "./ButtonRed.tsx";
-import Button_new from "./Button_new.tsx";
 import { ChangeEvent, KeyboardEvent, useState } from "react";
 import CompanyIcon from "./CompanyIcon.tsx";
 
@@ -19,12 +14,14 @@ interface Properties {
   darkMode?: boolean;
   onRemove: (stock: Stock) => void;
   onSelect: (stock: Stock) => void;
+  onclick?: () => void;
 }
 
 export default function ScrollableList({
   stockRepo,
   onRemove,
   onSelect,
+  onclick,
 }: Properties) {
   const [editingStockIndex, setEditingStockIndex] = useState<number | null>(
     null,
@@ -104,25 +101,30 @@ export default function ScrollableList({
           {[...stockRepo.getStocks()].map((s, index: number) => (
             <div
               key={index}
-              onClick={() => handleStockClick(s)}
+              onClick={() => {
+                handleStockClick(s);
+                if (onclick) {
+                  onclick();
+                }
+              }}
               className={`bg-white p-4 rounded-lg flex justify-between items-center border-2 border-transparent transition-colors duration-300 ease-in-out cursor-pointer hover:border-blue-500
                                 ${
                                   mostExpensiveStock &&
                                   s.price === mostExpensiveStock.price
-                                    ? "hover:bg-amber-200"
+                                    ? "hover:bg-amber-200" // Gold
                                     : secondMostExpensiveStock &&
                                         s.price ===
                                           secondMostExpensiveStock.price
-                                      ? "hover:bg-slate-200"
+                                      ? "hover:bg-slate-200" // Silver
                                       : thirdMostExpensiveStock &&
                                           s.price ===
                                             thirdMostExpensiveStock.price
-                                        ? "hover:bg-orange-200"
+                                        ? "hover:bg-orange-200" // Bronze
                                         : ""
                                 }`}
             >
               <div className="flex flex-row justify-start items-center gap-6 font-semibold text-xl">
-                <CompanyIcon></CompanyIcon>
+                <CompanyIcon />
                 <span>{s.name}</span>
                 <span className="flex items-center flex-row">
                   <PriceIcon />
@@ -155,7 +157,7 @@ export default function ScrollableList({
                 <a
                   target="_blank"
                   href={"https://businessinsider.com/" + s.name.toLowerCase()}
-                  onClick={(e) => e.stopPropagation()} // Prevent triggering parent click
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <NewsIcon />
                 </a>
@@ -186,19 +188,6 @@ export default function ScrollableList({
               </div>
             </div>
           ))}
-        </div>
-      </div>
-      <div className="flex flex-col">
-        <Chart></Chart>
-        <div className="flex flex-row justify-between  mt-4">
-          <SharesInput></SharesInput>
-          <div className="flex flex-row gap-4">
-            <ButtonGreen text="Buy" />
-            <ButtonRed text="Sell" />
-          </div>
-        </div>
-        <div className="flex flex-row justify-end mt-4">
-          <Button_new name="Analyse Risk" onClick={() => {}}></Button_new>
         </div>
       </div>
     </div>

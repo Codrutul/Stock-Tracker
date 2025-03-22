@@ -14,6 +14,11 @@ import Modal from "./components/Modal.tsx";
 import AdvancedSearch from "./components/AdvancedSearch.tsx";
 import ChartIcon from "./components/ChartIcon.tsx";
 import ChartLineIcon from "./components/CharLineIcon.tsx";
+import PortfolioPieChart from "./components/PortfolioPieChart.tsx";
+import DonutChartIcon from "./components/DonutChartIcon.tsx";
+import IndustryDonutChart from "./components/IndustryDonutChart.tsx";
+import BarChartIcon from "./components/BarChartIcon.tsx";
+import StockBarChart from "./components/StockBarChart.tsx";
 
 interface Option {
   value: string;
@@ -242,6 +247,11 @@ function App() {
     }
   }, [stockList, filterValue, sortOption]);
 
+  const [isChartOn, setIsChartOn] = useState(false);
+  const [isPieChartOn, setIsPieChartOn] = useState(true);
+  const [isDonutChartOn, setIsDonutChartOn] = useState(false);
+  const [isBarChartOn, setIsBarChartOn] = useState(false);
+
   return (
     <div
       style={{
@@ -322,24 +332,65 @@ function App() {
                 onClick={() => setIsAdvancedSearchOpen(true)}
               />
               <div className="flex items-center gap-2 ml-1">
-                <ChartIcon onClick={() => {/* Add your chart functionality */}} />
-                <ChartLineIcon onClick={() => {/* Add your line chart functionality */}} />
+                <ChartLineIcon
+                  onClick={() => {
+                    setIsChartOn(true);
+                    setIsPieChartOn(false);
+                    setIsDonutChartOn(false);
+                    setIsBarChartOn(false);
+                  }}
+                />
+                <ChartIcon
+                  onClick={() => {
+                    setIsChartOn(false);
+                    setIsPieChartOn(true);
+                    setIsDonutChartOn(false);
+                    setIsBarChartOn(false);
+                  }}
+                />
+                <DonutChartIcon
+                  onClick={() => {
+                    setIsChartOn(false);
+                    setIsPieChartOn(false);
+                    setIsDonutChartOn(true);
+                    setIsBarChartOn(false);
+                  }}
+                />
+                <BarChartIcon
+                  onClick={() => {
+                    setIsChartOn(false);
+                    setIsPieChartOn(false);
+                    setIsDonutChartOn(false);
+                    setIsBarChartOn(true);
+                  }}
+                />
               </div>
             </div>
           </div>
 
-          <div className="absolute top-4 left-[757px]">
-            <CompanyHeadline selectedStock={selectedStock} />
+          <div className="absolute top-1.5 left-[750px]">
+            {isChartOn ? (
+              <CompanyHeadline selectedStock={selectedStock} />
+            ) : null}
+            {isPieChartOn ? <PortfolioPieChart stockRepo={stockList} /> : null}
+            {isDonutChartOn ? (
+              <IndustryDonutChart stockRepo={stockList} />
+            ) : null}
+            {isBarChartOn ? <StockBarChart stockRepo={stockList} /> : null}
           </div>
         </div>
         <ScrollableList
           stockRepo={getFilteredAndSortedStocks()}
           onRemove={handleRemoveStock}
           onSelect={handleSelectStock}
+          onclick={() => {
+            setIsChartOn(true);
+            setIsPieChartOn(false);
+            setIsDonutChartOn(false);
+          }}
         />
       </div>
 
-      {/* Add the Modal component */}
       <Modal
         isOpen={isAdvancedSearchOpen}
         onClose={() => setIsAdvancedSearchOpen(false)}
