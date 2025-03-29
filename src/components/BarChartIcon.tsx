@@ -9,12 +9,13 @@ export default function BarChartIcon({ onClick }: Props) {
       className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors shadow-sm"
     >
       <svg
-        fill="#0555f5"
+        fill="#0341fc"
         viewBox="-0.5 0 32 32"
         xmlns="http://www.w3.org/2000/svg"
         preserveAspectRatio="xMidYMid"
-        stroke="#0555f5"
-        stroke-width="0.032"
+        stroke="#0341fc"
+        stroke-width="0.64"
+        transform="rotate(90)"
         width={24}
         height={24}
       >

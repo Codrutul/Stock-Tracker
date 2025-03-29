@@ -19,6 +19,7 @@ import DonutChartIcon from "./components/DonutChartIcon.tsx";
 import IndustryDonutChart from "./components/IndustryDonutChart.tsx";
 import BarChartIcon from "./components/BarChartIcon.tsx";
 import StockBarChart from "./components/StockBarChart.tsx";
+import { StockGenerator } from "./utils/StockGenerator.ts";
 
 interface Option {
   value: string;
@@ -247,10 +248,36 @@ function App() {
     }
   }, [stockList, filterValue, sortOption]);
 
-  const [isChartOn, setIsChartOn] = useState(false);
-  const [isPieChartOn, setIsPieChartOn] = useState(true);
+  const [isChartOn, setIsChartOn] = useState(true);
+  const [isPieChartOn, setIsPieChartOn] = useState(false);
   const [isDonutChartOn, setIsDonutChartOn] = useState(false);
   const [isBarChartOn, setIsBarChartOn] = useState(false);
+
+  const handleGenerateData = () => {
+    // Show loading notification
+    showNotification("Generating 500 stocks...", "info");
+
+    // Use setTimeout to prevent UI freeze during generation
+    setTimeout(() => {
+      try {
+        // Generate and add stocks
+        const updatedRepo = StockGenerator.addGeneratedStocksToRepo(stockList);
+        setStockList(updatedRepo);
+
+        // Show success notification
+        showNotification(
+          `Successfully added 500 new stocks to your portfolio`,
+          "success",
+        );
+      } catch (error) {
+        // Show error notification if something goes wrong
+        showNotification(
+          "Failed to generate stocks. Please try again.",
+          "error",
+        );
+      }
+    }, 100);
+  };
 
   return (
     <div
@@ -295,8 +322,8 @@ function App() {
             darkMode={darkMode}
             onClick={() => {}}
           />
+          <Button_new name="Generate Data" onClick={handleGenerateData} />
         </div>
-
         <div className="flex flex-row justify-end pr-4 gap-2">
           <SearchBar
             darkMode={darkMode}

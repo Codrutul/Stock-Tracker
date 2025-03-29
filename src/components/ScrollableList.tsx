@@ -28,6 +28,10 @@ export default function ScrollableList({
   );
   const [editedAmount, setEditedAmount] = useState<string>("");
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(5);
+
   const handleEditClick = (
     index: number,
     amount: number,
@@ -89,106 +93,243 @@ export default function ScrollableList({
     (a, b) => b.price - a.price,
   );
 
-  // Safely get the top 3 most expensive stocks
   const mostExpensiveStock = sortedStocks[0] || null;
   const secondMostExpensiveStock = sortedStocks[1] || null;
   const thirdMostExpensiveStock = sortedStocks[2] || null;
 
+  const stocks = stockRepo.getStocks();
+  const totalStocks = stocks.length;
+  const totalPages = Math.ceil(totalStocks / itemsPerPage);
+
+  if (currentPage > totalPages && totalPages > 0) {
+    setCurrentPage(totalPages);
+  }
+
+  const indexOfLastStock = currentPage * itemsPerPage;
+  const indexOfFirstStock = indexOfLastStock - itemsPerPage;
+  const currentStocks = stocks.slice(indexOfFirstStock, indexOfLastStock);
+
+  const goToPage = (pageNumber: number) => {
+    setCurrentPage(Math.max(1, Math.min(pageNumber, totalPages)));
+  };
+
+  const handleItemsPerPageChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newItemsPerPage = parseInt(e.target.value, 10);
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1);
+  };
+
   return (
-    <div className="h-full w-full flex flex-row items-start p-4 overflow-hidden pt-0">
+    <div className="h-full w-full flex flex-col items-start p-4 overflow-hidden pt-0">
       <div className="w-full max-w-3xl p-4">
-        <div className="h-[calc(100vh-340px)] flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-hidden">
-          {[...stockRepo.getStocks()].map((s, index: number) => (
-            <div
-              key={index}
-              onClick={() => {
-                handleStockClick(s);
-                if (onclick) {
-                  onclick();
-                }
-              }}
-              className={`bg-white p-4 rounded-lg flex justify-between items-center border-2 border-transparent transition-colors duration-300 ease-in-out cursor-pointer hover:border-blue-500
-                                ${
-                                  mostExpensiveStock &&
-                                  s.price === mostExpensiveStock.price
-                                    ? "hover:bg-amber-200" // Gold
-                                    : secondMostExpensiveStock &&
-                                        s.price ===
-                                          secondMostExpensiveStock.price
-                                      ? "hover:bg-slate-200" // Silver
-                                      : thirdMostExpensiveStock &&
-                                          s.price ===
-                                            thirdMostExpensiveStock.price
-                                        ? "hover:bg-orange-200" // Bronze
-                                        : ""
-                                }`}
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Stocks</h2>
+          <div className="flex items-center">
+            <label
+              htmlFor="itemsPerPage"
+              className="mr-2 text-sm text-gray-600"
             >
-              <div className="flex flex-row justify-start items-center gap-6 font-semibold text-xl">
-                <CompanyIcon />
-                <span>{s.name}</span>
-                <span className="flex items-center flex-row">
-                  <PriceIcon />
-                  {s.price}$
-                </span>
-                <span
-                  className={`${s.change > 0 ? "text-green-600" : "text-red-500"} flex flex-row items-center`}
-                >
-                  {s.change > 0 ? <GreenArrowIcon /> : <RedArrowIcon />}
-                  {s.change}%
-                </span>
-                <span className="flex items-center flex-row">
-                  <WalletIcon />
-                  {editingStockIndex === index ? (
-                    <input
-                      type="number"
-                      className="w-20 px-2 py-1 border border-gray-300 rounded"
-                      value={editedAmount}
-                      onChange={handleAmountChange}
-                      onKeyDown={(e) => handleKeyDown(e, s)}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                    />
-                  ) : (
-                    `${s.amount_owned}$`
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-end items-center gap-4">
-                <a
-                  target="_blank"
-                  href={"https://businessinsider.com/" + s.name.toLowerCase()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <NewsIcon />
-                </a>
-                <a onClick={(e) => handleEditClick(index, s.amount_owned, e)}>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill={editingStockIndex === index ? "#22c55e" : "#000000"}
-                    className="bi bi-pencil cursor-pointer edit-icon transition-colors duration-300 ease-in-out"
-                    width="30"
-                    height="30"
+              Items per page:
+            </label>
+            <select
+              id="itemsPerPage"
+              value={itemsPerPage}
+              onChange={handleItemsPerPageChange}
+              className="p-1 border border-gray-300 rounded text-sm bg-white"
+            >
+              <option value={3}>3</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="h-[calc(100vh-400px)] flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-hidden">
+          {currentStocks.map((s, index: number) => {
+            // Calculate the actual index in the full list
+            const actualIndex = indexOfFirstStock + index;
+
+            return (
+              <div
+                key={actualIndex}
+                onClick={() => {
+                  handleStockClick(s);
+                  if (onclick) {
+                    onclick();
+                  }
+                }}
+                className={`bg-white p-4 rounded-lg flex justify-between items-center border-2 border-transparent transition-colors duration-300 ease-in-out cursor-pointer hover:border-blue-500
+                                  ${
+                                    mostExpensiveStock &&
+                                    s.price === mostExpensiveStock.price
+                                      ? "hover:bg-amber-200" // Gold
+                                      : secondMostExpensiveStock &&
+                                          s.price ===
+                                            secondMostExpensiveStock.price
+                                        ? "hover:bg-slate-200" // Silver
+                                        : thirdMostExpensiveStock &&
+                                            s.price ===
+                                              thirdMostExpensiveStock.price
+                                          ? "hover:bg-orange-200" // Bronze
+                                          : ""
+                                  }`}
+              >
+                <div className="flex flex-row justify-start items-center gap-6 font-semibold text-xl">
+                  <CompanyIcon />
+                  <span>{s.name}</span>
+                  <span className="flex items-center flex-row">
+                    <PriceIcon />
+                    {s.price}$
+                  </span>
+                  <span
+                    className={`${s.change > 0 ? "text-green-600" : "text-red-500"} flex flex-row items-center`}
                   >
-                    <path
-                      fillRule="evenodd"
-                      clipRule="evenodd"
-                      d="M20.8477 1.87868C19.6761 0.707109 17.7766 0.707105 16.605 1.87868L2.44744 16.0363C2.02864 16.4551 1.74317 16.9885 1.62702 17.5692L1.03995 20.5046C0.760062 21.904 1.9939 23.1379 3.39334 22.858L6.32868 22.2709C6.90945 22.1548 7.44285 21.8693 7.86165 21.4505L22.0192 7.29289C23.1908 6.12132 23.1908 4.22183 22.0192 3.05025L20.8477 1.87868ZM18.0192 3.29289C18.4098 2.90237 19.0429 2.90237 19.4335 3.29289L20.605 4.46447C20.9956 4.85499 20.9956 5.48815 20.605 5.87868L17.9334 8.55027L15.3477 5.96448L18.0192 3.29289ZM13.9334 7.3787L3.86165 17.4505C3.72205 17.5901 3.6269 17.7679 3.58818 17.9615L3.00111 20.8968L5.93645 20.3097C6.13004 20.271 6.30784 20.1759 6.44744 20.0363L16.5192 9.96448L13.9334 7.3787Z"
-                    />
-                  </svg>
-                </a>
-                <a
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove(s);
-                  }}
-                >
-                  <TrashIcon />
-                </a>
+                    {s.change > 0 ? <GreenArrowIcon /> : <RedArrowIcon />}
+                    {s.change}%
+                  </span>
+                  <span className="flex items-center flex-row">
+                    <WalletIcon />
+                    {editingStockIndex === actualIndex ? (
+                      <input
+                        type="number"
+                        className="w-20 px-2 py-1 border border-gray-300 rounded"
+                        value={editedAmount}
+                        onChange={handleAmountChange}
+                        onKeyDown={(e) => handleKeyDown(e, s)}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    ) : (
+                      `${s.amount_owned}$`
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-end items-center gap-4">
+                  <a
+                    target="_blank"
+                    href={"https://businessinsider.com/" + s.name.toLowerCase()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <NewsIcon />
+                  </a>
+                  <a
+                    onClick={(e) =>
+                      handleEditClick(actualIndex, s.amount_owned, e)
+                    }
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill={
+                        editingStockIndex === actualIndex
+                          ? "#22c55e"
+                          : "#000000"
+                      }
+                      className="bi bi-pencil cursor-pointer edit-icon transition-colors duration-300 ease-in-out"
+                      width="30"
+                      height="30"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        clipRule="evenodd"
+                        d="M20.8477 1.87868C19.6761 0.707109 17.7766 0.707105 16.605 1.87868L2.44744 16.0363C2.02864 16.4551 1.74317 16.9885 1.62702 17.5692L1.03995 20.5046C0.760062 21.904 1.9939 23.1379 3.39334 22.858L6.32868 22.2709C6.90945 22.1548 7.44285 21.8693 7.86165 21.4505L22.0192 7.29289C23.1908 6.12132 23.1908 4.22183 22.0192 3.05025L20.8477 1.87868ZM18.0192 3.29289C18.4098 2.90237 19.0429 2.90237 19.4335 3.29289L20.605 4.46447C20.9956 4.85499 20.9956 5.48815 20.605 5.87868L17.9334 8.55027L15.3477 5.96448L18.0192 3.29289ZM13.9334 7.3787L3.86165 17.4505C3.72205 17.5901 3.6269 17.7679 3.58818 17.9615L3.00111 20.8968L5.93645 20.3097C6.13004 20.271 6.30784 20.1759 6.44744 20.0363L16.5192 9.96448L13.9334 7.3787Z"
+                      />
+                    </svg>
+                  </a>
+                  <a
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(s);
+                    }}
+                  >
+                    <TrashIcon />
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+          {currentStocks.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              No stocks found. Try adjusting your filters or add some stocks.
+            </div>
+          )}
+        </div>
+
+        {/* Pagination controls */}
+        {totalStocks > 0 && (
+          <div className="mt-4 flex justify-center items-center">
+            <div className="flex space-x-2">
+              <div className="flex space-x-1">
+                {/* First page button if not visible in current page range */}
+                {currentPage > 3 && totalPages > 5 && (
+                  <>
+                    <button
+                      onClick={() => goToPage(1)}
+                      className="px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
+                    >
+                      1
+                    </button>
+                    {currentPage > 4 && (
+                      <span className="px-2 py-1 text-gray-500">...</span>
+                    )}
+                  </>
+                )}
+
+                {/* Page number buttons */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    // If 5 or fewer pages, show all
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    // If near the start
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    // If near the end
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    // In the middle
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  // Skip out-of-bounds pages
+                  if (pageNum <= 0 || pageNum > totalPages) return null;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => goToPage(pageNum)}
+                      className={`px-3 py-1 rounded-md text-sm font-medium ${
+                        currentPage === pageNum
+                          ? "bg-blue-600 text-white"
+                          : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                }).filter(Boolean)}
+
+                {/* Last page button if not visible in current page range */}
+                {currentPage < totalPages - 2 && totalPages > 5 && (
+                  <>
+                    {currentPage < totalPages - 3 && (
+                      <span className="px-2 py-1 text-gray-500">...</span>
+                    )}
+                    <button
+                      onClick={() => goToPage(totalPages)}
+                      className="px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
