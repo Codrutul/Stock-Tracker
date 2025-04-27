@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import "./globals.css";
 import Button_new from "./components/Button_new.tsx";
 import Dark_mode_icon from "./components/Dark_mode_icon.tsx";
 import SearchBar from "./components/SearchBar.tsx";
 import EditableHeader from "./components/EditableHeader.tsx";
 import DropDown from "./components/DropDown.tsx";
 import ScrollableList from "./components/ScrollableList.tsx";
-import StockRepo, { stockDataBase } from "./classes/StockRepo.ts";
+import StockRepo from "./classes/StockRepo.ts";
 import Stock from "./classes/Stock.ts";
 import CompanyHeadline from "./components/CompanyHeadline.tsx";
 import Notification from "./components/Notification.tsx";
@@ -20,6 +19,8 @@ import IndustryDonutChart from "./components/IndustryDonutChart.tsx";
 import BarChartIcon from "./components/BarChartIcon.tsx";
 import StockBarChart from "./components/StockBarChart.tsx";
 import { StockGenerator } from "./utils/StockGenerator.ts";
+import { stockApi } from "./utils/api.ts";
+import FileManager from "./pages/FileManager.tsx";
 
 interface Option {
   value: string;
@@ -88,6 +89,74 @@ function App() {
   });
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState<'portfolio' | 'fileManager'>('portfolio');
+
+  // Effect to fetch all stocks on initial load
+  useEffect(() => {
+    const fetchStocks = async () => {
+      try {
+        console.log('🔄 App: Fetching all stocks from backend...');
+        setIsLoading(true);
+        const stocks = await stockApi.getAllStocks();
+        setStockList(new StockRepo(stocks));
+        console.log(`✅ App: Successfully loaded ${stocks.length} stocks`);
+        showNotification("Stocks loaded successfully", "success");
+      } catch (error) {
+        console.error("❌ App: Error fetching stocks:", error);
+        showNotification("Failed to load stocks from server", "error");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStocks();
+  }, []);
+  
+  // Effect to fetch filtered and sorted stocks when filter or sort options change
+  useEffect(() => {
+    const fetchFilteredAndSortedStocks = async () => {
+      try {
+        console.log(`🔄 App: Fetching filtered and sorted stocks...`);
+        console.log(`   Filter: ${filterValue}, Price Range: ${priceRange.min}-${priceRange.max}, Sort: ${sortOption}`);
+        setIsLoading(true);
+        const stocks = await stockApi.getFilteredAndSortedStocks(
+          filterValue,
+          priceRange.min,
+          priceRange.max,
+          sortOption
+        );
+        
+        // Update stock list with filtered and sorted data from backend
+        const updatedRepo = new StockRepo(stocks);
+        setStockList(updatedRepo);
+        console.log(`✅ App: Successfully loaded ${stocks.length} filtered/sorted stocks`);
+        
+        // Update selected stock if needed
+        if (stocks.length > 0) {
+          // If current selected stock is not in the filtered list, select the first one
+          if (!selectedStock || !stocks.some(s => s.name === selectedStock.name)) {
+            setSelectedStock(stocks[0]);
+            console.log(`🔄 App: Updated selected stock to ${stocks[0].name}`);
+          }
+        } else if (selectedStock) {
+          // If no stocks in filtered list but we have a selected stock, clear it
+          setSelectedStock(null);
+          console.log('🔄 App: Cleared selected stock');
+        }
+      } catch (error) {
+        console.error("❌ App: Error fetching filtered and sorted stocks:", error);
+        showNotification("Failed to apply filters and sorting", "error");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Don't fetch on initial render (the first useEffect will handle that)
+    if (filterValue || sortOption || priceRange.min > 0 || priceRange.max < 1000) {
+      fetchFilteredAndSortedStocks();
+    }
+  }, [filterValue, sortOption, priceRange.min, priceRange.max]);
 
   const handleSearchChange = (newText: string) => {
     setSearchValue(newText);
@@ -105,60 +174,95 @@ function App() {
   };
 
   const hideNotification = () => {
-    setNotification((prev) => ({
+    setNotification((prev: { message: string; isVisible: boolean; type: "error" | "success" | "info"; }) => ({
       ...prev,
       isVisible: false,
     }));
   };
 
-  const handleAddStock = () => {
+  const handleAddStock = async () => {
     if (!searchValue.trim()) {
       showNotification("Please enter a stock name", "info");
       return;
     }
 
-    if (stockDataBase.verifyStock(searchValue)) {
-      // Check if the stock is already in the portfolio
+    try {
+      console.log(`🔄 App: Adding stock "${searchValue}"...`);
+      setIsLoading(true);
+      
+      // Normalize search value (trim whitespace)
+      const stockName = searchValue.trim();
+      
+      // Check if the stock is already in the portfolio (case insensitive check)
       const stockExists = stockList
         .getStocks()
         .some(
-          (stock) => stock.name.toLowerCase() === searchValue.toLowerCase(),
+          (stock: Stock) => stock.name.toLowerCase() === stockName.toLowerCase(),
         );
 
       if (stockExists) {
+        console.log(`⚠️ App: Stock "${stockName}" already exists in portfolio`);
         showNotification(
-          `${searchValue} is already in your portfolio`,
+          `${stockName} is already in your portfolio`,
           "error",
         );
+        setIsLoading(false);
         return;
       }
-
-      const stockToAdd = stockDataBase.getStock(searchValue);
-      setStockList((prevRepo) => {
-        return prevRepo.addStock(stockToAdd);
+      
+      // Send only the name to the backend, which will generate all other attributes
+      console.log(`🔄 App: Creating stock with name: ${stockName}`);
+      const addedStock = await stockApi.createStock(new Stock(stockName));
+      
+      console.log(`✅ App: Successfully added stock: ${addedStock.name}`);
+      
+      // Update local state
+      setStockList((prevRepo: StockRepo) => {
+        return prevRepo.addStock(addedStock);
       });
-      setSelectedStock(stockToAdd || null);
+      setSelectedStock(addedStock);
 
       // Show success notification
-      showNotification(`Added ${searchValue} to your portfolio`, "success");
-
+      showNotification(`Added ${stockName} to your portfolio`, "success");
+      
       // Clear the search bar
       setSearchValue("");
-    } else {
-      showNotification(`Could not find stock: ${searchValue}`, "error");
+    } catch (error) {
+      console.error("❌ App: Error adding stock:", error);
+      showNotification(`Error adding ${searchValue}: ${error instanceof Error ? error.message : 'Unknown error'}`, "error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRemoveStock = (stock: Stock) => {
-    setStockList((prevRepo) => prevRepo.removeStock(stock));
-    if (selectedStock && selectedStock.name === stock.name) {
-      if (stockList.getStocks().length > 0) {
-        setSelectedStock(stockList.getStocks()[0]);
-      } else setSelectedStock(null);
-    }
+  const handleRemoveStock = async (stock: Stock) => {
+    try {
+      console.log(`🔄 App: Removing stock "${stock.name}"...`);
+      setIsLoading(true);
+      // Remove from database via API
+      await stockApi.deleteStock(stock.name);
+      console.log(`✅ App: Successfully removed stock: ${stock.name}`);
+      
+      // Update local state
+      setStockList((prevRepo: StockRepo) => prevRepo.removeStock(stock));
+      if (selectedStock && selectedStock.name === stock.name) {
+        if (stockList.getStocks().length > 0) {
+          setSelectedStock(stockList.getStocks()[0]);
+          console.log(`🔄 App: Updated selected stock to ${stockList.getStocks()[0].name}`);
+        } else {
+          setSelectedStock(null);
+          console.log('🔄 App: Cleared selected stock');
+        }
+      }
 
-    // Show notification when a stock is removed
-    showNotification(`Removed ${stock.name} from your portfolio`, "info");
+      // Show notification when a stock is removed
+      showNotification(`Removed ${stock.name} from your portfolio`, "info");
+    } catch (error) {
+      console.error("❌ App: Error removing stock:", error);
+      showNotification(`Error removing ${stock.name}`, "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSelectStock = (stock: Stock) => {
@@ -177,106 +281,56 @@ function App() {
     setPriceRange({ min: minPrice, max: maxPrice });
   };
 
-  // Function to sort stocks based on selected option
-  const sortStocks = (stocks: Stock[]): Stock[] => {
-    const stocksCopy = [...stocks];
-
-    switch (sortOption) {
-      case "Stock Price":
-        return stocksCopy.sort((a, b) => b.price - a.price);
-
-      case "Company Market Cap":
-        return stocksCopy.sort((a, b) => b.marketCap - a.marketCap);
-
-      case "Growth in the last month":
-        return stocksCopy.sort((a, b) => b.change - a.change);
-
-      case "Dividend amount":
-        return stocksCopy.sort((a, b) => b.dividendAmount - a.dividendAmount);
-
-      case "Amount owned":
-        return stocksCopy.sort((a, b) => b.amount_owned - a.amount_owned);
-
-      default:
-        return stocksCopy;
-    }
-  };
-
-  // Filter and sort stocks
+  // This function just passes the already filtered and sorted stockList 
+  // which will be loaded incrementally by the ScrollableList using infinite scrolling
   const getFilteredAndSortedStocks = () => {
-    let filteredStocks: Stock[];
-
-    // First filter by industry
-    if (filterValue === "All") {
-      filteredStocks = stockList.getStocks();
-    } else {
-      filteredStocks = stockList.getStocksByIndustry(filterValue);
-    }
-
-    filteredStocks = new StockRepo(filteredStocks).getStocksPriceRange(
-      priceRange["min"],
-      priceRange["max"],
-    );
-
-    const sortedStocks = sortStocks(filteredStocks);
-    return new StockRepo(sortedStocks);
+    return stockList; // The stockList is already filtered and sorted from the backend
   };
-
-  // Effect to ensure a stock is selected when the component mounts
-  // or when the stock list changes
-  useEffect(() => {
-    const filteredAndSortedStocks = getFilteredAndSortedStocks().getStocks();
-
-    // If we have stocks but nothing is selected, select the first one
-    if (filteredAndSortedStocks.length > 0 && !selectedStock) {
-      setSelectedStock(filteredAndSortedStocks[0]);
-    }
-    // If we have no stocks, make sure nothing is selected
-    else if (filteredAndSortedStocks.length === 0 && selectedStock) {
-      setSelectedStock(null);
-    }
-    // If the currently selected stock is not in the filtered list anymore,
-    // select the first one from the filtered list
-    else if (
-      filteredAndSortedStocks.length > 0 &&
-      selectedStock &&
-      !filteredAndSortedStocks.some(
-        (stock) => stock.name === selectedStock.name,
-      )
-    ) {
-      setSelectedStock(filteredAndSortedStocks[0]);
-    }
-  }, [stockList, filterValue, sortOption]);
 
   const [isChartOn, setIsChartOn] = useState(true);
   const [isPieChartOn, setIsPieChartOn] = useState(false);
   const [isDonutChartOn, setIsDonutChartOn] = useState(false);
   const [isBarChartOn, setIsBarChartOn] = useState(false);
 
-  const handleGenerateData = () => {
+  const handleGenerateData = async () => {
     // Show loading notification
-    showNotification("Generating 500 stocks...", "info");
+    showNotification("Generating stocks...", "info");
+    setIsLoading(true);
 
-    // Use setTimeout to prevent UI freeze during generation
-    setTimeout(() => {
-      try {
-        // Generate and add stocks
-        const updatedRepo = StockGenerator.addGeneratedStocksToRepo(stockList);
-        setStockList(updatedRepo);
-
-        // Show success notification
-        showNotification(
-          `Successfully added 500 new stocks to your portfolio`,
-          "success",
-        );
-      } catch (error) {
-        // Show error notification if something goes wrong
-        showNotification(
-          "Failed to generate stocks. Please try again.",
-          "error",
-        );
+    try {
+      // Generate stocks locally first
+      const generatedStocks = StockGenerator.generateRandomStocks(10); // Generate fewer stocks for API
+      const updatedRepo = new StockRepo([...stockList.getStocks()]);
+      
+      // Add each stock to the database via API
+      for (const stock of generatedStocks) {
+        try {
+          const addedStock = await stockApi.createStock(stock);
+          updatedRepo.appendStock(addedStock);
+        } catch (err) {
+          console.error(`Error adding stock ${stock.name}:`, err);
+          // Continue with the next stock
+        }
       }
-    }, 100);
+      
+      // Update local state
+      setStockList(updatedRepo);
+
+      // Show success notification
+      showNotification(
+        `Successfully added new stocks to your portfolio`,
+        "success"
+      );
+    } catch (err) {
+      // Show error notification if something goes wrong
+      console.error("Failed to generate stocks:", err);
+      showNotification(
+        "Failed to generate stocks. Please try again.",
+        "error"
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -322,101 +376,122 @@ function App() {
             darkMode={darkMode}
             onClick={() => {}}
           />
-          <Button_new name="Generate Data" onClick={handleGenerateData} />
-        </div>
-        <div className="flex flex-row justify-end pr-4 gap-2">
-          <SearchBar
-            darkMode={darkMode}
-            value={searchValue}
-            onChange={handleSearchChange}
-            onEnter={handleAddStock}
-          ></SearchBar>
+          <Button_new 
+            name={isLoading ? "Loading..." : "Generate Data"} 
+            onClick={handleGenerateData}
+            disabled={isLoading}
+          />
           <Button_new
-            name="Add"
+            name="File Manager"
             darkMode={darkMode}
-            onClick={handleAddStock}
-          ></Button_new>
+            onClick={() => setCurrentPage('fileManager')}
+          />
+          <Button_new
+            name="Portfolio"
+            darkMode={darkMode}
+            onClick={() => setCurrentPage('portfolio')}
+          />
         </div>
+        {currentPage === 'portfolio' && (
+          <div className="flex flex-row justify-end pr-4 gap-2">
+            <SearchBar
+              darkMode={darkMode}
+              value={searchValue}
+              onChange={handleSearchChange}
+              onEnter={handleAddStock}
+            ></SearchBar>
+            <Button_new
+              name={isLoading ? "Loading..." : "Add"}
+              darkMode={darkMode}
+              onClick={handleAddStock}
+              disabled={isLoading}
+            ></Button_new>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col items-start justify-start">
-        <div className="w-full px-8 relative">
-          <div className="flex flex-col items-start justify-start py-4 gap-2">
-            <EditableHeader initial_text="My Portfolio" />
-            <DropDown
-              functionality="Sort by:"
-              options={optionsSort}
-              onChange={handleSortChange}
-            />
-            <div className="flex flex-row items-center gap-3.5">
+      {currentPage === 'portfolio' ? (
+        <div className="flex flex-col items-start justify-start">
+          <div className="w-full px-8 relative">
+            <div className="flex flex-col items-start justify-start py-4 gap-2">
+              <EditableHeader initial_text="My Portfolio" />
               <DropDown
-                functionality="Filter by:"
-                options={optionsFilter}
-                onChange={handleFilterChange}
+                functionality="Sort by:"
+                options={optionsSort}
+                onChange={handleSortChange}
               />
-              <Button_new
-                name="Advanced Search"
-                onClick={() => setIsAdvancedSearchOpen(true)}
-              />
-              <div className="flex items-center gap-2 ml-1">
-                <ChartLineIcon
-                  onClick={() => {
-                    setIsChartOn(true);
-                    setIsPieChartOn(false);
-                    setIsDonutChartOn(false);
-                    setIsBarChartOn(false);
-                  }}
+              <div className="flex flex-row items-center gap-3.5">
+                <DropDown
+                  functionality="Filter by:"
+                  options={optionsFilter}
+                  onChange={handleFilterChange}
                 />
-                <ChartIcon
-                  onClick={() => {
-                    setIsChartOn(false);
-                    setIsPieChartOn(true);
-                    setIsDonutChartOn(false);
-                    setIsBarChartOn(false);
-                  }}
+                <Button_new
+                  name="Advanced Search"
+                  onClick={() => setIsAdvancedSearchOpen(true)}
                 />
-                <DonutChartIcon
-                  onClick={() => {
-                    setIsChartOn(false);
-                    setIsPieChartOn(false);
-                    setIsDonutChartOn(true);
-                    setIsBarChartOn(false);
-                  }}
-                />
-                <BarChartIcon
-                  onClick={() => {
-                    setIsChartOn(false);
-                    setIsPieChartOn(false);
-                    setIsDonutChartOn(false);
-                    setIsBarChartOn(true);
-                  }}
-                />
+                <div className="flex items-center gap-2 ml-1">
+                  <ChartLineIcon
+                    onClick={() => {
+                      setIsChartOn(true);
+                      setIsPieChartOn(false);
+                      setIsDonutChartOn(false);
+                      setIsBarChartOn(false);
+                    }}
+                  />
+                  <ChartIcon
+                    onClick={() => {
+                      setIsChartOn(false);
+                      setIsPieChartOn(true);
+                      setIsDonutChartOn(false);
+                      setIsBarChartOn(false);
+                    }}
+                  />
+                  <DonutChartIcon
+                    onClick={() => {
+                      setIsChartOn(false);
+                      setIsPieChartOn(false);
+                      setIsDonutChartOn(true);
+                      setIsBarChartOn(false);
+                    }}
+                  />
+                  <BarChartIcon
+                    onClick={() => {
+                      setIsChartOn(false);
+                      setIsPieChartOn(false);
+                      setIsDonutChartOn(false);
+                      setIsBarChartOn(true);
+                    }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="absolute top-1.5 left-[750px]">
-            {isChartOn ? (
-              <CompanyHeadline selectedStock={selectedStock} />
-            ) : null}
-            {isPieChartOn ? <PortfolioPieChart stockRepo={stockList} /> : null}
-            {isDonutChartOn ? (
-              <IndustryDonutChart stockRepo={stockList} />
-            ) : null}
-            {isBarChartOn ? <StockBarChart stockRepo={stockList} /> : null}
+            <div className="absolute top-1.5 left-[750px]">
+              {isChartOn ? (
+                <CompanyHeadline selectedStock={selectedStock} />
+              ) : null}
+              {isPieChartOn ? <PortfolioPieChart stockRepo={stockList} /> : null}
+              {isDonutChartOn ? (
+                <IndustryDonutChart stockRepo={stockList} />
+              ) : null}
+              {isBarChartOn ? <StockBarChart stockRepo={stockList} /> : null}
+            </div>
           </div>
+          <ScrollableList
+            stockRepo={getFilteredAndSortedStocks()}
+            onRemove={handleRemoveStock}
+            onSelect={handleSelectStock}
+            onclick={() => {
+              setIsChartOn(true);
+              setIsPieChartOn(false);
+              setIsDonutChartOn(false);
+            }}
+          />
         </div>
-        <ScrollableList
-          stockRepo={getFilteredAndSortedStocks()}
-          onRemove={handleRemoveStock}
-          onSelect={handleSelectStock}
-          onclick={() => {
-            setIsChartOn(true);
-            setIsPieChartOn(false);
-            setIsDonutChartOn(false);
-          }}
-        />
-      </div>
+      ) : (
+        <FileManager />
+      )}
 
       <Modal
         isOpen={isAdvancedSearchOpen}

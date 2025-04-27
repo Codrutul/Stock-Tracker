@@ -1,6 +1,9 @@
 import StockRepo from "./classes/StockRepo";
 import Stock from "./classes/Stock";
 import "@testing-library/jest-dom";
+import { render } from "@testing-library/react";
+import ScrollableList from "./components/ScrollableList";
+import { expect, test, vi, describe } from "vitest";
 
 describe("Stock Filtering and Sorting Tests", () => {
   // Test data
@@ -193,5 +196,56 @@ describe("Stock Filtering and Sorting Tests", () => {
       expect(stocks.map((s) => s.name)).toContain("Apple");
       expect(stocks.map((s) => s.name)).toContain("Tesla");
     });
+  });
+
+  // Test for ScrollableList with infinite scrolling
+  test('ScrollableList loads more items when scrolling', async () => {
+    // Create a mock stock repository with many stocks
+    const mockStocks = Array.from({ length: 30 }, (_, i) => 
+      new Stock(`Test Stock ${i + 1}`, 100 + i, 10, 5, '', 1000000, 1.5, 'Technology', 'Test City', 15)
+    );
+    const mockRepo = new StockRepo(mockStocks);
+    
+    // Mock functions
+    const mockOnRemove = vi.fn();
+    const mockOnSelect = vi.fn();
+    const mockOnClick = vi.fn();
+    
+    // Render the component
+    const { getByText, queryByText } = render(
+      <ScrollableList 
+        stockRepo={mockRepo} 
+        onRemove={mockOnRemove} 
+        onSelect={mockOnSelect} 
+        onclick={mockOnClick} 
+      />
+    );
+    
+    // Initially only first batch of stocks should be visible
+    expect(getByText('Test Stock 1')).toBeInTheDocument();
+    expect(getByText('Test Stock 10')).toBeInTheDocument();
+    expect(queryByText('Test Stock 11')).not.toBeInTheDocument();
+    
+    // Mock Intersection Observer
+    let intersectionObserverCallback: (entries: { isIntersecting: boolean }[]) => void;
+    global.IntersectionObserver = vi.fn((callback) => {
+      intersectionObserverCallback = callback;
+      return {
+        observe: vi.fn(),
+        disconnect: vi.fn(),
+        unobserve: vi.fn()
+      };
+    });
+    
+    // Simulate scroll to bottom
+    const mockEntries = [{ isIntersecting: true }];
+    intersectionObserverCallback(mockEntries);
+    
+    // Wait for the next batch to load (with the timeout delay)
+    await new Promise(r => setTimeout(r, 600));
+    
+    // Now we should see the next batch of stocks
+    expect(getByText('Test Stock 11')).toBeInTheDocument();
+    expect(getByText('Test Stock 20')).toBeInTheDocument();
   });
 });

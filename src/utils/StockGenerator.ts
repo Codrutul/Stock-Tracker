@@ -113,6 +113,50 @@ export class StockGenerator {
     return stock;
   }
 
+  /**
+   * Generates a set of random stocks with the specified count
+   * @param count Number of stocks to generate
+   * @returns Array of generated Stock instances
+   */
+  public static generateRandomStocks(count: number): Stock[] {
+    const stocks: Stock[] = [];
+    const usedNames = new Set<string>();
+
+    for (let i = 0; i < count; i++) {
+      let companyName: string;
+
+      // Ensure unique company names
+      do {
+        companyName = faker.company.name().replace(/[.,]/g, "");
+      } while (usedNames.has(companyName));
+
+      usedNames.add(companyName);
+
+      // Create the stock with initial amount_owned of 0
+      const stock = new Stock(
+        companyName,
+        this.randomNumber(1, 5000), // price: $1 to $5000
+        0, // initial amount_owned
+        this.randomNumber(-50, 100), // change: -50% to +100%
+        "src/assets/company_default.png",
+        faker.number.int({ min: 1000000, max: 3000000000000 }), // marketCap: $1M to $3T
+        this.randomNumber(0, 10), // dividendAmount: 0 to 10
+        faker.helpers.arrayElement(this.industries),
+        // Location: City, State/Country
+        `${faker.location.city()}, ${faker.location.state()}`,
+        this.randomNumber(5, 100), // peRatio: 5 to 100
+      );
+
+      // Set a random amount_owned after creation
+      const randomAmount = this.randomNumber(0, 1000);
+      stock.updateAmount(randomAmount);
+
+      stocks.push(stock);
+    }
+
+    return stocks;
+  }
+
   private static randomNumber(
     min: number,
     max: number,

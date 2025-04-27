@@ -6,8 +6,9 @@ import RedArrowIcon from "./RedArrowIcon.tsx";
 import GreenArrowIcon from "./GreenArrowIcon.tsx";
 import StockRepo from "../classes/StockRepo.ts";
 import Stock from "../classes/Stock.ts";
-import { ChangeEvent, KeyboardEvent, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useState, useEffect, useRef, useCallback } from "react";
 import CompanyIcon from "./CompanyIcon.tsx";
+import { stockApi } from "../utils/api.ts";
 
 interface Properties {
   stockRepo: StockRepo;
@@ -27,10 +28,65 @@ export default function ScrollableList({
     null,
   );
   const [editedAmount, setEditedAmount] = useState<string>("");
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(5);
+  
+  // States for infinite scrolling
+  const [displayedStocks, setDisplayedStocks] = useState<Stock[]>([]);
+  const itemsPerPage = 10; // Fixed number of items to load per batch
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastStockElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading) return;
+    
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        loadMoreStocks();
+      }
+    }, { threshold: 0.5 });
+    
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore]);
+  
+  // Load initial stocks
+  useEffect(() => {
+    setDisplayedStocks([]);
+    setPage(1);
+    setHasMore(true);
+    loadInitialStocks();
+  }, [stockRepo]); // Re-initialize when stockRepo changes
+  
+  const loadInitialStocks = () => {
+    const stocks = stockRepo.getStocks();
+    const initialStocks = stocks.slice(0, itemsPerPage);
+    setDisplayedStocks(initialStocks);
+    setHasMore(initialStocks.length < stocks.length);
+  };
+  
+  const loadMoreStocks = () => {
+    setLoading(true);
+    
+    // Simulate API call with timeout
+    setTimeout(() => {
+      const stocks = stockRepo.getStocks();
+      const nextPage = page + 1;
+      const startIdx = (nextPage - 1) * itemsPerPage;
+      const endIdx = startIdx + itemsPerPage;
+      
+      const nextBatch = stocks.slice(startIdx, endIdx);
+      
+      if (nextBatch.length > 0) {
+        setDisplayedStocks(prev => [...prev, ...nextBatch]);
+        setPage(nextPage);
+      }
+      
+      setHasMore(endIdx < stocks.length);
+      setLoading(false);
+    }, 500); // Simulate network delay
+  };
 
   const handleEditClick = (
     index: number,
@@ -46,37 +102,36 @@ export default function ScrollableList({
     setEditedAmount(e.target.value);
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, stock: Stock) => {
+  const handleKeyDown = async (e: KeyboardEvent<HTMLInputElement>, stock: Stock) => {
     if (e.key === "Enter") {
       const newAmount = parseFloat(editedAmount);
       if (!isNaN(newAmount) && newAmount >= 0) {
-        // Create a new Stock object with the updated amount
-        const updatedStock = new Stock(
-          stock.name,
-          stock.price,
-          newAmount,
-          stock.change,
-          stock.image_src,
-          stock.marketCap,
-          stock.dividendAmount,
-          stock.industry,
-          stock.headquarters,
-          stock.peRatio,
-        );
+        try {
+          // Show loading indicator or disable input
+          setEditingStockIndex(null); // Exit edit mode immediately to prevent double submission
 
-        // Replace the old stock with the updated one at the same index
-        const stocks = [...stockRepo.getStocks()];
-        const stockIndex = stocks.findIndex((s) => s.name === stock.name);
-
-        if (stockIndex !== -1) {
-          stocks[stockIndex] = updatedStock;
-          // Update the stockRepo (assuming it has a method to update a stock)
+          console.log(`📝 Updating amount for ${stock.name} to ${newAmount}`);
+          
+          // Call API to update the amount in the backend
+          const updatedStock = await stockApi.updateStockAmount(stock.name, newAmount);
+          console.log(`✅ Amount updated successfully for ${stock.name}`, updatedStock);
+          
+          // Update the local stock
           stock.updateAmount(newAmount);
-          onSelect(stock); // Update the selected stock with new values
+          
+          // Update UI by notifying parent components
+          onSelect(stock); // Update the selected stock if this was the selected one
+        } catch (error) {
+          console.error(`❌ Error updating amount for ${stock.name}:`, error);
+          // Revert to edit mode on error or show an error message
+          setEditingStockIndex(null);
+          
+          // TODO: Add proper error handling, maybe show a notification
+          alert(`Failed to update amount: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-
-        // Exit edit mode
-        setEditingStockIndex(null);
+      } else {
+        // Invalid amount, stay in edit mode
+        alert("Please enter a valid amount (non-negative number)");
       }
     } else if (e.key === "Escape") {
       // Cancel editing
@@ -97,63 +152,24 @@ export default function ScrollableList({
   const secondMostExpensiveStock = sortedStocks[1] || null;
   const thirdMostExpensiveStock = sortedStocks[2] || null;
 
-  const stocks = stockRepo.getStocks();
-  const totalStocks = stocks.length;
-  const totalPages = Math.ceil(totalStocks / itemsPerPage);
-
-  if (currentPage > totalPages && totalPages > 0) {
-    setCurrentPage(totalPages);
-  }
-
-  const indexOfLastStock = currentPage * itemsPerPage;
-  const indexOfFirstStock = indexOfLastStock - itemsPerPage;
-  const currentStocks = stocks.slice(indexOfFirstStock, indexOfLastStock);
-
-  const goToPage = (pageNumber: number) => {
-    setCurrentPage(Math.max(1, Math.min(pageNumber, totalPages)));
-  };
-
-  const handleItemsPerPageChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const newItemsPerPage = parseInt(e.target.value, 10);
-    setItemsPerPage(newItemsPerPage);
-    setCurrentPage(1);
-  };
-
   return (
     <div className="h-full w-full flex flex-col items-start p-4 overflow-hidden pt-0">
       <div className="w-full max-w-3xl p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Stocks</h2>
-          <div className="flex items-center">
-            <label
-              htmlFor="itemsPerPage"
-              className="mr-2 text-sm text-gray-600"
-            >
-              Items per page:
-            </label>
-            <select
-              id="itemsPerPage"
-              value={itemsPerPage}
-              onChange={handleItemsPerPageChange}
-              className="p-1 border border-gray-300 rounded text-sm bg-white"
-            >
-              <option value={3}>3</option>
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={15}>15</option>
-              <option value={20}>20</option>
-            </select>
+          <div className="text-sm text-gray-600">
+            {displayedStocks.length} of {stockRepo.getStocks().length} stocks loaded
           </div>
         </div>
 
         <div className="h-[calc(100vh-400px)] flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-hidden">
-          {currentStocks.map((s, index: number) => {
-            // Calculate the actual index in the full list
-            const actualIndex = indexOfFirstStock + index;
-
+          {displayedStocks.map((s, index: number) => {
+            const isLastElement = index === displayedStocks.length - 1;
+            
             return (
               <div
-                key={actualIndex}
+                key={index}
+                ref={isLastElement ? lastStockElementRef : null}
                 onClick={() => {
                   handleStockClick(s);
                   if (onclick) {
@@ -191,7 +207,7 @@ export default function ScrollableList({
                   </span>
                   <span className="flex items-center flex-row">
                     <WalletIcon />
-                    {editingStockIndex === actualIndex ? (
+                    {editingStockIndex === index ? (
                       <input
                         type="number"
                         className="w-20 px-2 py-1 border border-gray-300 rounded"
@@ -216,14 +232,14 @@ export default function ScrollableList({
                   </a>
                   <a
                     onClick={(e) =>
-                      handleEditClick(actualIndex, s.amount_owned, e)
+                      handleEditClick(index, s.amount_owned, e)
                     }
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
                       fill={
-                        editingStockIndex === actualIndex
+                        editingStockIndex === index
                           ? "#22c55e"
                           : "#000000"
                       }
@@ -250,86 +266,19 @@ export default function ScrollableList({
               </div>
             );
           })}
-          {currentStocks.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              No stocks found. Try adjusting your filters or add some stocks.
+          
+          {loading && (
+            <div className="flex justify-center p-4">
+              <div className="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10"></div>
+            </div>
+          )}
+          
+          {!hasMore && displayedStocks.length > 0 && (
+            <div className="text-center p-2 text-gray-500">
+              No more stocks to load
             </div>
           )}
         </div>
-
-        {/* Pagination controls */}
-        {totalStocks > 0 && (
-          <div className="mt-4 flex justify-center items-center">
-            <div className="flex space-x-2">
-              <div className="flex space-x-1">
-                {/* First page button if not visible in current page range */}
-                {currentPage > 3 && totalPages > 5 && (
-                  <>
-                    <button
-                      onClick={() => goToPage(1)}
-                      className="px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
-                    >
-                      1
-                    </button>
-                    {currentPage > 4 && (
-                      <span className="px-2 py-1 text-gray-500">...</span>
-                    )}
-                  </>
-                )}
-
-                {/* Page number buttons */}
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    // If 5 or fewer pages, show all
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    // If near the start
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    // If near the end
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    // In the middle
-                    pageNum = currentPage - 2 + i;
-                  }
-
-                  // Skip out-of-bounds pages
-                  if (pageNum <= 0 || pageNum > totalPages) return null;
-
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => goToPage(pageNum)}
-                      className={`px-3 py-1 rounded-md text-sm font-medium ${
-                        currentPage === pageNum
-                          ? "bg-blue-600 text-white"
-                          : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                }).filter(Boolean)}
-
-                {/* Last page button if not visible in current page range */}
-                {currentPage < totalPages - 2 && totalPages > 5 && (
-                  <>
-                    {currentPage < totalPages - 3 && (
-                      <span className="px-2 py-1 text-gray-500">...</span>
-                    )}
-                    <button
-                      onClick={() => goToPage(totalPages)}
-                      className="px-3 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100"
-                    >
-                      {totalPages}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

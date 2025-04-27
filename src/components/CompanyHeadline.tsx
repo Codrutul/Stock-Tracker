@@ -14,7 +14,8 @@ export default function CompanyHeadline({
 }: CompanyHeadlineProps) {
   // Format market cap in billions/trillions
   const formatMarketCap = (marketCap: number): string => {
-    if (!marketCap) return "N/A";
+    if (marketCap === undefined || marketCap === null) return "N/A";
+    
     if (marketCap >= 1000000000000) {
       return `${(marketCap / 1000000000000).toFixed(2)}T$`;
     } else if (marketCap >= 1000000000) {
@@ -27,14 +28,14 @@ export default function CompanyHeadline({
 
   // Simplified dividend formatter to match image
   const formatDividend = (dividend: number): string => {
-    if (!dividend) return "N/A";
-    return dividend.toString();
+    if (dividend === undefined || dividend === null) return "N/A";
+    return dividend.toFixed(2).toString();
   };
 
   // Simplified PE ratio formatter
   const formatPERatio = (peRatio: number): string => {
-    if (!peRatio) return "N/A";
-    return peRatio.toString();
+    if (peRatio === undefined || peRatio === null) return "N/A";
+    return peRatio.toFixed(2).toString();
   };
 
   return (
