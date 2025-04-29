@@ -12,15 +12,35 @@ class Stock {
         peRatio = 0
     ) {
         this.name = name;
-        this.price = price;
+        
+        // Sanitize numeric values
+        this.price = this.sanitizeNumeric(price);
+        this.amount_owned = this.sanitizeNumeric(amount_owned);
+        this.change = this.sanitizeNumeric(change);
+        this.marketCap = this.sanitizeNumeric(marketCap);
+        this.dividendAmount = this.sanitizeNumeric(dividendAmount);
+        this.peRatio = this.sanitizeNumeric(peRatio);
+        
+        // Non-numeric values
         this.image_src = image_src;
-        this.amount_owned = amount_owned;
-        this.change = change;
-        this.marketCap = marketCap;
-        this.dividendAmount = dividendAmount;
         this.industry = industry;
         this.headquarters = headquarters;
-        this.peRatio = peRatio;
+    }
+    
+    // Helper method to ensure numeric values are valid
+    sanitizeNumeric(value) {
+        // Convert to number if it's a string
+        if (typeof value === 'string') {
+            value = parseFloat(value);
+        }
+        
+        // Handle NaN or undefined
+        if (isNaN(value) || value === undefined) {
+            return 0;
+        }
+        
+        // Round to 2 decimal places to avoid precision errors
+        return parseFloat(value.toFixed(2));
     }
 }
 

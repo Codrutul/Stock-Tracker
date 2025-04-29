@@ -86,7 +86,13 @@ class StockRepo {
     async getAllStocks() {
         try {
             const result = await pool.query(`SELECT * FROM ${this.tableName}`);
-            return result.rows;
+            
+            // Sanitize numeric values in the results
+            const sanitizedRows = result.rows.map(row => {
+                return this.sanitizeNumericValues(row);
+            });
+            
+            return sanitizedRows;
         } catch (error) {
             console.error('Error getting all stocks:', error);
             console.log('Using in-memory fallback data');
@@ -131,8 +137,11 @@ class StockRepo {
     // Add a new stock
     async addStock(stock) {
         try {
+            // Sanitize the stock data to ensure numeric values are valid
+            const sanitizedStock = this.sanitizeNumericValues(stock);
+            
             const { name, price, amount_owned, change, image_src, marketCap, 
-                dividendAmount, industry, headquarters, peRatio } = stock;
+                dividendAmount, industry, headquarters, peRatio } = sanitizedStock;
             
             const result = await pool.query(
                 `INSERT INTO ${this.tableName} 
@@ -182,8 +191,11 @@ class StockRepo {
     // Update a stock
     async updateStock(name, stockData) {
         try {
-            const fields = Object.keys(stockData).filter(key => key !== 'name');
-            const values = fields.map(field => stockData[field]);
+            // Sanitize numeric values to ensure they're valid for PostgreSQL
+            const sanitizedData = this.sanitizeNumericValues(stockData);
+            
+            const fields = Object.keys(sanitizedData).filter(key => key !== 'name');
+            const values = fields.map(field => sanitizedData[field]);
             
             // Create SET clause for the SQL query
             const setClause = fields.map((field, index) => `${field} = $${index + 2}`).join(', ');
@@ -207,6 +219,34 @@ class StockRepo {
             }
             return null;
         }
+    }
+
+    // Helper method to sanitize numeric values for PostgreSQL
+    sanitizeNumericValues(data) {
+        const sanitized = { ...data };
+        
+        // Fields that should be numeric
+        const numericFields = ['price', 'amount_owned', 'change', 'marketCap', 'dividendAmount', 'peRatio'];
+        
+        for (const field of numericFields) {
+            if (field in sanitized) {
+                // Ensure the value is a valid number
+                if (typeof sanitized[field] === 'string') {
+                    sanitized[field] = parseFloat(sanitized[field]);
+                }
+                
+                // Handle NaN or invalid numbers
+                if (isNaN(sanitized[field])) {
+                    sanitized[field] = 0;
+                }
+                
+                // Make sure we don't have multiple decimal points or other invalid formats
+                // Format the number with 2 decimal places
+                sanitized[field] = parseFloat(sanitized[field].toFixed(2));
+            }
+        }
+        
+        return sanitized;
     }
 
     // Delete a stock by name

@@ -18,6 +18,41 @@ interface Properties {
   onclick?: () => void;
 }
 
+// Add CSS for the flash animation
+const flashAnimationStyle = `
+@keyframes priceFlash {
+  0% { background-color: rgba(97, 218, 251, 0.7); }
+  100% { background-color: transparent; }
+}
+
+.price-updated {
+  animation: priceFlash 2s ease-out;
+}
+`;
+
+// Animation to highlight updated stocks
+const animationStyle = `
+@keyframes flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(59, 130, 246, 0.5); }
+}
+
+.stock-updated {
+  animation: flash 1s ease-in-out 3;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.price-pulse {
+  animation: pulse 0.5s ease-in-out 3;
+  font-weight: bold;
+}
+`;
+
 export default function ScrollableList({
   stockRepo,
   onRemove,
@@ -36,6 +71,15 @@ export default function ScrollableList({
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   
+  // Map to track which stocks were recently updated
+  const [updatedStocks, setUpdatedStocks] = useState<{[key: string]: boolean}>({});
+  
+  // Create a unique key for the current data state to help with re-rendering
+  const [dataVersion, setDataVersion] = useState(0);
+  
+  // Get current timestamp to use as a cache-busting key for price/change updates
+  const stockPriceUpdateKey = useRef(Date.now());
+  
   const observer = useRef<IntersectionObserver | null>(null);
   const lastStockElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading) return;
@@ -53,18 +97,82 @@ export default function ScrollableList({
   
   // Load initial stocks
   useEffect(() => {
-    setDisplayedStocks([]);
-    setPage(1);
-    setHasMore(true);
-    loadInitialStocks();
-  }, [stockRepo]); // Re-initialize when stockRepo changes
-  
-  const loadInitialStocks = () => {
+    console.log('🔄 ScrollableList: stockRepo changed, reloading stocks');
+    console.log(`📊 ScrollableList: StockRepo now has ${stockRepo.getStocks().length} stocks`);
+    
+    // Immediately update displayed stocks with latest data
     const stocks = stockRepo.getStocks();
-    const initialStocks = stocks.slice(0, itemsPerPage);
+    const initialStocks = stocks.slice(0, Math.max(itemsPerPage, displayedStocks.length));
+    
+    console.log(`🔄 ScrollableList: Updating displayed stocks (${initialStocks.length} items)`);
+    
+    // Reset pagination if needed
+    if (displayedStocks.length === 0) {
+      setPage(1);
+    }
+    
+    // Update displayed stocks with new data
     setDisplayedStocks(initialStocks);
     setHasMore(initialStocks.length < stocks.length);
-  };
+    
+    // Force a re-render of the entire list
+    setDataVersion(prev => prev + 1);
+    stockPriceUpdateKey.current = Date.now();
+    
+    // Log the first few stocks for debugging
+    if (initialStocks.length > 0) {
+      console.log('📊 ScrollableList: First few stocks:');
+      initialStocks.slice(0, 3).forEach(stock => {
+        console.log(`   - ${stock.name}: Price=${stock.price}, Change=${stock.change}%`);
+      });
+    }
+  }, [stockRepo]); // Re-initialize when stockRepo changes
+  
+  // Effect to listen for price updates in the repo and update UI
+  useEffect(() => {
+    console.log('🔄 ScrollableList: Setting up stock update detector');
+    
+    // When displayed stocks change, check for updates
+    const currentStocks = stockRepo.getStocks();
+    if (displayedStocks.length === 0 || currentStocks.length === 0) return;
+    
+    const newUpdates: {[key: string]: boolean} = {};
+    let hasUpdates = false;
+    
+    // Compare displayed stocks with latest repo data
+    displayedStocks.forEach(displayedStock => {
+      const currentStock = currentStocks.find(s => s.name === displayedStock.name);
+      if (currentStock && (
+          currentStock.price !== displayedStock.price || 
+          currentStock.change !== displayedStock.change
+      )) {
+        console.log(`📊 ScrollableList: Detected update for ${displayedStock.name}: Price ${displayedStock.price} → ${currentStock.price}, Change ${displayedStock.change}% → ${currentStock.change}%`);
+        newUpdates[displayedStock.name] = true;
+        hasUpdates = true;
+      }
+    });
+    
+    if (hasUpdates) {
+      console.log('🔄 ScrollableList: Highlighting updated stocks');
+      setUpdatedStocks(newUpdates);
+      
+      // Clear the highlight after animation completes
+      const timerId = setTimeout(() => {
+        setUpdatedStocks({});
+      }, 3000);
+      
+      return () => clearTimeout(timerId);
+    }
+  }, [displayedStocks, stockRepo]);
+  
+  // Simple cache update on interval
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      stockPriceUpdateKey.current = Date.now();
+    }, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
   
   const loadMoreStocks = () => {
     setLoading(true);
@@ -121,6 +229,9 @@ export default function ScrollableList({
           
           // Update UI by notifying parent components
           onSelect(stock); // Update the selected stock if this was the selected one
+          
+          // Force re-render of the list
+          setDataVersion(prev => prev + 1);
         } catch (error) {
           console.error(`❌ Error updating amount for ${stock.name}:`, error);
           // Revert to edit mode on error or show an error message
@@ -154,6 +265,10 @@ export default function ScrollableList({
 
   return (
     <div className="h-full w-full flex flex-col items-start p-4 overflow-hidden pt-0">
+      {/* Add style element for animation */}
+      <style dangerouslySetInnerHTML={{ __html: flashAnimationStyle }} />
+      <style dangerouslySetInnerHTML={{ __html: animationStyle }} />
+      
       <div className="w-full max-w-3xl p-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Stocks</h2>
@@ -168,7 +283,7 @@ export default function ScrollableList({
             
             return (
               <div
-                key={index}
+                key={`${s.name}-${s.price}-${s.change}-${dataVersion}`}
                 ref={isLastElement ? lastStockElementRef : null}
                 onClick={() => {
                   handleStockClick(s);
@@ -190,17 +305,24 @@ export default function ScrollableList({
                                               thirdMostExpensiveStock.price
                                           ? "hover:bg-orange-200" // Bronze
                                           : ""
-                                  }`}
+                                  }
+                                  ${updatedStocks[s.name] ? "price-updated" : ""}
+                                  ${updatedStocks[s.name] ? "stock-updated" : ""}
+                                  `}
               >
                 <div className="flex flex-row justify-start items-center gap-6 font-semibold text-xl">
                   <CompanyIcon />
                   <span>{s.name}</span>
-                  <span className="flex items-center flex-row">
+                  <span 
+                    className={`flex items-center flex-row ${updatedStocks[s.name] ? 'price-pulse' : ''}`} 
+                    key={`price-${s.name}-${s.price}-${dataVersion}`}
+                  >
                     <PriceIcon />
                     {s.price}$
                   </span>
                   <span
-                    className={`${s.change > 0 ? "text-green-600" : "text-red-500"} flex flex-row items-center`}
+                    className={`${s.change > 0 ? "text-green-600" : "text-red-500"} flex flex-row items-center ${updatedStocks[s.name] ? 'price-pulse' : ''}`}
+                    key={`change-${s.name}-${s.change}-${dataVersion}`}
                   >
                     {s.change > 0 ? <GreenArrowIcon /> : <RedArrowIcon />}
                     {s.change}%
@@ -248,9 +370,9 @@ export default function ScrollableList({
                       height="30"
                     >
                       <path
+                        d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z"
                         fillRule="evenodd"
                         clipRule="evenodd"
-                        d="M20.8477 1.87868C19.6761 0.707109 17.7766 0.707105 16.605 1.87868L2.44744 16.0363C2.02864 16.4551 1.74317 16.9885 1.62702 17.5692L1.03995 20.5046C0.760062 21.904 1.9939 23.1379 3.39334 22.858L6.32868 22.2709C6.90945 22.1548 7.44285 21.8693 7.86165 21.4505L22.0192 7.29289C23.1908 6.12132 23.1908 4.22183 22.0192 3.05025L20.8477 1.87868ZM18.0192 3.29289C18.4098 2.90237 19.0429 2.90237 19.4335 3.29289L20.605 4.46447C20.9956 4.85499 20.9956 5.48815 20.605 5.87868L17.9334 8.55027L15.3477 5.96448L18.0192 3.29289ZM13.9334 7.3787L3.86165 17.4505C3.72205 17.5901 3.6269 17.7679 3.58818 17.9615L3.00111 20.8968L5.93645 20.3097C6.13004 20.271 6.30784 20.1759 6.44744 20.0363L16.5192 9.96448L13.9334 7.3787Z"
                       />
                     </svg>
                   </a>
@@ -260,22 +382,19 @@ export default function ScrollableList({
                       onRemove(s);
                     }}
                   >
-                    <TrashIcon />
+                    <TrashIcon></TrashIcon>
                   </a>
                 </div>
               </div>
             );
           })}
-          
           {loading && (
-            <div className="flex justify-center p-4">
-              <div className="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10"></div>
-            </div>
-          )}
-          
-          {!hasMore && displayedStocks.length > 0 && (
-            <div className="text-center p-2 text-gray-500">
-              No more stocks to load
+            <div className="text-center py-4">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]">
+                <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
+                  Loading...
+                </span>
+              </div>
             </div>
           )}
         </div>

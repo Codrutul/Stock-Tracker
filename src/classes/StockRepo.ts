@@ -26,6 +26,14 @@ export default class StockRepo {
         return new StockRepo(newList);
     }
 
+    updateStock(updatedStock: Stock) {
+        const index = this.list.findIndex(stock => stock.name === updatedStock.name);
+        if (index !== -1) {
+            this.list[index] = updatedStock;
+        }
+        return this;
+    }
+
     getStocks() {
         return this.list
     }

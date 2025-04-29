@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Button_new from "./components/Button_new.tsx";
 import Dark_mode_icon from "./components/Dark_mode_icon.tsx";
 import SearchBar from "./components/SearchBar.tsx";
@@ -21,6 +21,7 @@ import StockBarChart from "./components/StockBarChart.tsx";
 import { StockGenerator } from "./utils/StockGenerator.ts";
 import { stockApi } from "./utils/api.ts";
 import FileManager from "./pages/FileManager.tsx";
+import { websocketService, WebSocketEvent } from "./utils/websocket.ts";
 
 interface Option {
   value: string;
@@ -88,9 +89,13 @@ function App() {
     type: "error" as "error" | "success" | "info",
   });
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
-  const [priceRange, setPriceRange] = useState({ min: 0, max: 1000 });
+  const [priceRange, setPriceRange] = useState({ min: 0, max: 9999999999999 });
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState<'portfolio' | 'fileManager'>('portfolio');
+  const [isRealTimeUpdatesEnabled, setIsRealTimeUpdatesEnabled] = useState(true);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+  const [showUpdateBadge, setShowUpdateBadge] = useState(false);
+  const websocketInitialized = useRef(false);
 
   // Effect to fetch all stocks on initial load
   useEffect(() => {
@@ -112,6 +117,130 @@ function App() {
 
     fetchStocks();
   }, []);
+  
+  // Initialize WebSocket connection
+  useEffect(() => {
+    if (websocketInitialized.current) return;
+    
+    // Mark as initialized to prevent multiple connections
+    websocketInitialized.current = true;
+    
+    // Define WebSocket event handler
+    const handleWebSocketEvent = (event: WebSocketEvent) => {
+      if (!isRealTimeUpdatesEnabled) return;
+      
+      console.log(`📊 WebSocket event received: ${event.type}`);
+      
+      if (event.type === 'connect') {
+        showNotification("Real-time updates connected", "success");
+      } 
+      else if (event.type === 'disconnect') {
+        showNotification("Real-time updates disconnected", "info");
+      } 
+      else if (event.type === 'error') {
+        showNotification("Real-time update error", "error");
+      } 
+      else if (event.type === 'stocks') {
+        // Handle stock updates
+        const updatedStocks = event.payload as Stock[];
+        
+        if (updatedStocks && updatedStocks.length > 0) {
+          console.log(`📈 App: Received updates for ${updatedStocks.length} stocks via WebSocket`);
+          // Set the last update time
+          setLastUpdateTime(new Date());
+          
+          // Get the current stocks
+          const currentStocks = stockList.getStocks().slice();
+          
+          // Map for faster lookups
+          const stockMap = new Map();
+          currentStocks.forEach(stock => stockMap.set(stock.name, stock));
+          
+          // Track which stocks were updated
+          let changesFound = false;
+          
+          // Update stocks directly
+          updatedStocks.forEach(updatedStock => {
+            const existingStock = stockMap.get(updatedStock.name);
+            if (existingStock) {
+              if (existingStock.price !== updatedStock.price || existingStock.change !== updatedStock.change) {
+                changesFound = true;
+                console.log(`✏️ App: Updating ${updatedStock.name}: Price ${existingStock.price} → ${updatedStock.price}, Change ${existingStock.change}% → ${updatedStock.change}%`);
+                
+                // Replace with updated stock
+                stockMap.set(updatedStock.name, updatedStock);
+              }
+            }
+          });
+          
+          if (changesFound) {
+            // Create a new array with updated stocks
+            const updatedStockArray = Array.from(stockMap.values());
+            
+            // Create and set a brand new StockRepo instance
+            console.log(`🔄 App: Creating new StockRepo with ${updatedStockArray.length} stocks`);
+            const newRepo = new StockRepo(updatedStockArray);
+            setStockList(newRepo);
+            
+            // Update selected stock if needed
+            if (selectedStock) {
+              const updatedSelectedStock = updatedStocks.find(s => s.name === selectedStock.name);
+              if (updatedSelectedStock) {
+                console.log(`🔄 App: Updating selected stock ${selectedStock.name}`);
+                setSelectedStock(updatedSelectedStock);
+              }
+            }
+            
+            // Show update badge for 5 seconds
+            setShowUpdateBadge(true);
+            setTimeout(() => setShowUpdateBadge(false), 5000);
+            
+            showNotification("Stock prices updated", "info");
+          } else {
+            console.log('ℹ️ App: No price changes detected in WebSocket update');
+          }
+        }
+      }
+      else if (event.type === 'init') {
+        // Handle initial data load from WebSocket
+        const stocks = event.payload as Stock[];
+        
+        if (stocks && stocks.length > 0) {
+          console.log(`📈 Received initial data for ${stocks.length} stocks from WebSocket`);
+          const newStockRepo = new StockRepo(stocks);
+          setStockList(newStockRepo);
+          
+          // If we don't have a selected stock yet, select the first one
+          if (!selectedStock && stocks.length > 0) {
+            setSelectedStock(stocks[0]);
+          } else if (selectedStock) {
+            // If we have a selected stock, find it in the new data
+            const selectedStockInNewData = stocks.find(s => s.name === selectedStock.name);
+            if (selectedStockInNewData) {
+              setSelectedStock(selectedStockInNewData);
+            } else if (stocks.length > 0) {
+              // If selected stock doesn't exist in new data, select the first stock
+              setSelectedStock(stocks[0]);
+            }
+          }
+        }
+      }
+    };
+    
+    // Add WebSocket event listener
+    websocketService.addEventListener(handleWebSocketEvent);
+    
+    // Connect to WebSocket server
+    console.log('🔌 Establishing WebSocket connection...');
+    websocketService.connect();
+    
+    // Cleanup on component unmount
+    return () => {
+      console.log('🔌 Cleaning up WebSocket connection...');
+      websocketService.removeEventListener(handleWebSocketEvent);
+      websocketService.disconnect();
+    };
+  }, [isRealTimeUpdatesEnabled, selectedStock, stockList]);
   
   // Effect to fetch filtered and sorted stocks when filter or sort options change
   useEffect(() => {
@@ -333,6 +462,18 @@ function App() {
     }
   };
 
+  const toggleRealTimeUpdates = () => {
+    const newState = !isRealTimeUpdatesEnabled;
+    setIsRealTimeUpdatesEnabled(newState);
+    
+    if (newState) {
+      websocketService.connect();
+      showNotification("Real-time updates enabled", "success");
+    } else {
+      showNotification("Real-time updates disabled", "info");
+    }
+  };
+
   return (
     <div
       style={{
@@ -343,6 +484,18 @@ function App() {
       }}
       className="overflow-hidden"
     >
+      {/* Animation style for updates */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes pulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 1; }
+          100% { opacity: 0.6; }
+        }
+        .animate-pulse {
+          animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+      `}} />
+      
       {/* Notification component */}
       <Notification
         message={notification.message}
@@ -391,6 +544,22 @@ function App() {
             darkMode={darkMode}
             onClick={() => setCurrentPage('portfolio')}
           />
+          <Button_new
+            name={isRealTimeUpdatesEnabled ? "Disable Updates" : "Enable Updates"}
+            darkMode={darkMode}
+            onClick={toggleRealTimeUpdates}
+          />
+          {isRealTimeUpdatesEnabled && lastUpdateTime && (
+            <div className={`flex items-center ${darkMode ? 'text-blue-300' : 'text-blue-700'} ml-2`}>
+              <div className={`w-2 h-2 rounded-full ${lastUpdateTime && Date.now() - lastUpdateTime.getTime() < 5000 ? 'bg-green-500 animate-pulse' : 'bg-gray-400'} mr-2`}></div>
+              <span className="text-xs">Last update: {lastUpdateTime.toLocaleTimeString()}</span>
+              {showUpdateBadge && (
+                <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">
+                  New updates
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {currentPage === 'portfolio' && (
           <div className="flex flex-row justify-end pr-4 gap-2">

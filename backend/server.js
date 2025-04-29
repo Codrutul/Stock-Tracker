@@ -4,12 +4,21 @@ const dotenv = require("dotenv");
 const stockRoutes = require("./routes/stockRoutes");
 const fileRoutes = require("./routes/fileRoutes");
 const StockRepo = require("./models/StockRepo");
+const http = require("http");
+const WebSocket = require("ws");
+const { faker } = require("@faker-js/faker");
 
 // Load environment variables from .env file
 dotenv.config({ path: "./database.env" });
 
 const app = express();
 const PORT = 5001;
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
 
 // Middleware
 app.use(cors());
@@ -103,11 +112,181 @@ app.use((req, res, next) => {
     next();
 });
 
+// Store connected WebSocket clients
+const clients = new Set();
+
+// WebSocket connection handler
+wss.on('connection', (ws) => {
+    console.log('🔌 New WebSocket client connected');
+    
+    // Add client to the set
+    clients.add(ws);
+    
+    // Send initial data
+    StockRepo.getAllStocks()
+        .then(stocks => {
+            ws.send(JSON.stringify({
+                type: 'init',
+                stocks: stocks
+            }));
+        })
+        .catch(err => {
+            console.error('Error sending initial data:', err);
+        });
+    
+    // Handle client messages
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            console.log('📥 Received message from client:', data);
+            
+            // Handle different message types here if needed
+        } catch (error) {
+            console.error('Error parsing client message:', error);
+        }
+    });
+    
+    // Handle client disconnection
+    ws.on('close', () => {
+        console.log('🔌 WebSocket client disconnected');
+        clients.delete(ws);
+    });
+    
+    // Handle errors
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        clients.delete(ws);
+    });
+});
+
+// Broadcast data to all connected clients
+function broadcastData(data) {
+    try {
+        // Sanitize numeric values in stock data before sending
+        if (data.type === 'stockUpdates' && Array.isArray(data.stocks)) {
+            data.stocks = data.stocks.map(stock => {
+                const numericFields = ['price', 'amount_owned', 'change', 'marketCap', 'dividendAmount', 'peRatio'];
+                
+                numericFields.forEach(field => {
+                    if (field in stock) {
+                        // Convert to number if it's a string
+                        if (typeof stock[field] === 'string') {
+                            stock[field] = parseFloat(stock[field]);
+                        }
+                        
+                        // Handle NaN or undefined
+                        if (isNaN(stock[field]) || stock[field] === undefined) {
+                            stock[field] = 0;
+                        }
+                        
+                        // Round to 2 decimal places
+                        stock[field] = parseFloat(parseFloat(stock[field]).toFixed(2));
+                    }
+                });
+                
+                return stock;
+            });
+        }
+        
+        const payload = JSON.stringify(data);
+        clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(payload);
+            }
+        });
+    } catch (error) {
+        console.error('Error broadcasting data:', error);
+    }
+}
+
+// Function to generate random stock price changes
+function generateStockUpdates() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const stocks = await StockRepo.getAllStocks();
+            const updatedStocks = [];
+            
+            for (const stock of stocks) {
+                // Random chance to update this stock (50%)
+                if (Math.random() > 0.5) {
+                    // Generate small random price change (-5% to +5%)
+                    const changePercent = parseFloat(((Math.random() * 10) - 5).toFixed(2));
+                    const newPrice = stock.price * (1 + (changePercent / 100));
+                    const roundedPrice = Math.round(newPrice * 100) / 100;
+                    
+                    // Calculate the new cumulative change value and round it
+                    let newChangeValue = 0;
+                    if (typeof stock.change === 'number') {
+                        newChangeValue = parseFloat((stock.change + changePercent).toFixed(2));
+                    } else {
+                        // If change is not a number, reset it to just the current change percent
+                        newChangeValue = changePercent;
+                    }
+                    
+                    // Update the stock in the database
+                    await StockRepo.updateStock(stock.name, { 
+                        price: roundedPrice,
+                        change: newChangeValue
+                    });
+                    
+                    // Add to the list of updated stocks
+                    updatedStocks.push({
+                        ...stock,
+                        price: roundedPrice,
+                        change: newChangeValue
+                    });
+                }
+            }
+            
+            resolve(updatedStocks);
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+// Asynchronous thread that generates new data periodically
+let isGenerating = false;
+async function startDataGenerationThread() {
+    if (isGenerating) return;
+    isGenerating = true;
+    
+    console.log('🚀 Starting asynchronous data generation thread');
+    
+    // Run continually
+    while (isGenerating) {
+        try {
+            // Generate updates every few seconds
+            const updatedStocks = await generateStockUpdates();
+            
+            if (updatedStocks.length > 0) {
+                console.log(`📊 Generated updates for ${updatedStocks.length} stocks`);
+                
+                // Broadcast updates to all clients
+                broadcastData({
+                    type: 'stockUpdates',
+                    stocks: updatedStocks
+                });
+            }
+            
+            // Wait for 10 seconds between updates
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        } catch (error) {
+            console.error('Error in data generation thread:', error);
+            // Wait a bit before trying again
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+}
+
 // Initialize database
 (async () => {
     try {
         await StockRepo.initialize();
         console.log("Database initialized successfully");
+        
+        // Start the data generation thread
+        startDataGenerationThread();
     } catch (error) {
         console.error("Failed to initialize database:", error);
     }
@@ -133,9 +312,10 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`\n🚀 Server running on http://localhost:${PORT}`);
     console.log(`📚 API Documentation available at http://localhost:${PORT}/`);
+    console.log(`🔌 WebSocket server running on ws://localhost:${PORT}`);
     console.log(`⌚ ${new Date().toISOString()}`);
 });
 

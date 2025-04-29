@@ -4,6 +4,7 @@ import SharesInput from "./SharesInput.tsx";
 import ButtonGreen from "./ButtonGreen.tsx";
 import ButtonRed from "./ButtonRed.tsx";
 import Button_new from "./Button_new.tsx";
+import { useEffect, useState, useRef } from 'react';
 
 interface CompanyHeadlineProps {
   selectedStock?: Stock | null;
@@ -12,6 +13,39 @@ interface CompanyHeadlineProps {
 export default function CompanyHeadline({
   selectedStock,
 }: CompanyHeadlineProps) {
+  // Add a ref to track when the stock data changes to ensure re-renders
+  const updateKey = useRef(Date.now());
+  // Keep a local copy of the selected stock to detect changes
+  const [stockSnapshot, setStockSnapshot] = useState<Stock | null | undefined>(selectedStock);
+  
+  // Update the update key when the selected stock changes
+  useEffect(() => {
+    if (selectedStock !== stockSnapshot) {
+      updateKey.current = Date.now();
+      setStockSnapshot(selectedStock);
+    }
+  }, [selectedStock, stockSnapshot]);
+  
+  // Also set up a small interval to check for price/change updates within the same stock
+  useEffect(() => {
+    if (!selectedStock) return;
+    
+    const intervalId = setInterval(() => {
+      if (stockSnapshot && selectedStock) {
+        // If price or change percentage has been updated, force a re-render
+        if (stockSnapshot.price !== selectedStock.price || 
+            stockSnapshot.change !== selectedStock.change) {
+          console.log('🔄 CompanyHeadline: Detected stock price/change update, refreshing');
+          updateKey.current = Date.now();
+          // Create a proper copy of the stock for comparison
+          setStockSnapshot(selectedStock);
+        }
+      }
+    }, 500);
+    
+    return () => clearInterval(intervalId);
+  }, [selectedStock, stockSnapshot]);
+
   // Format market cap in billions/trillions
   const formatMarketCap = (marketCap: number): string => {
     if (marketCap === undefined || marketCap === null) return "N/A";
@@ -47,14 +81,14 @@ export default function CompanyHeadline({
 
       <div className="grid grid-cols-2 gap-y-3 gap-x-8 w-full text-sm mt-2.5">
         {/* Row 1 */}
-        <div>
+        <div key={`market-cap-${updateKey.current}`}>
           <span className="font-normal">Market cap: </span>
           <span>
             {selectedStock ? formatMarketCap(selectedStock.marketCap) : ""}
           </span>
         </div>
 
-        <div>
+        <div key={`dividend-${updateKey.current}`}>
           <span className="font-normal">Dividend yield: </span>
           <span>
             {selectedStock ? formatDividend(selectedStock.dividendAmount) : ""}
@@ -67,7 +101,7 @@ export default function CompanyHeadline({
           <span>{selectedStock ? selectedStock.headquarters : ""}</span>
         </div>
 
-        <div>
+        <div key={`pe-ratio-${updateKey.current}`}>
           <span className="font-normal">P/E ratio: </span>
           <span>
             {selectedStock ? formatPERatio(selectedStock.peRatio) : ""}
@@ -80,12 +114,11 @@ export default function CompanyHeadline({
           <span>{selectedStock ? selectedStock.industry : ""}</span>
         </div>
 
-        <div></div>
-        {/* Empty cell */}
+
       </div>
 
       <div className="flex flex-col mt-2">
-        <Chart />
+        <Chart key={`chart-${updateKey.current}`} stockData={selectedStock} />
         <div className="flex flex-row justify-between mt-4">
           <SharesInput />
           <div className="flex flex-row gap-4">
