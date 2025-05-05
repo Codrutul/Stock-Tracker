@@ -96,6 +96,8 @@ function App() {
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [showUpdateBadge, setShowUpdateBadge] = useState(false);
   const websocketInitialized = useRef(false);
+  const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(navigator.onLine);
+  const [isServerOnline, setIsServerOnline] = useState<boolean>(true);
 
   // Effect to fetch all stocks on initial load
   useEffect(() => {
@@ -474,6 +476,32 @@ function App() {
     }
   };
 
+  // Effect to track network status
+  useEffect(() => {
+    const updateOnlineStatus = () => setIsNetworkOnline(navigator.onLine);
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
+
+  // Effect to periodically check server status (every 10s)
+  useEffect(() => {
+    const checkServer = async () => {
+      if (isNetworkOnline) {
+        const ok = await stockApi.pingServer();
+        setIsServerOnline(ok);
+      } else {
+        setIsServerOnline(false);
+      }
+    };
+    checkServer();
+    const interval = setInterval(checkServer, 10000);
+    return () => clearInterval(interval);
+  }, [isNetworkOnline]);
+
   return (
     <div
       style={{
@@ -496,6 +524,18 @@ function App() {
         }
       `}} />
       
+      {/* Network/server status banners */}
+      {!isNetworkOnline && (
+        <div style={{ background: '#f87171', color: 'white', padding: '8px', textAlign: 'center', fontWeight: 'bold', letterSpacing: 1 }}>
+          <span role="img" aria-label="wifi-off">📡</span> You are offline (network down)
+        </div>
+      )}
+      {isNetworkOnline && !isServerOnline && (
+        <div style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center', fontWeight: 'bold', letterSpacing: 1 }}>
+          <span role="img" aria-label="server-down">🖥️</span> Server is unreachable (server down)
+        </div>
+      )}
+
       {/* Notification component */}
       <Notification
         message={notification.message}

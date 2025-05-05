@@ -1,4 +1,5 @@
-const {Pool} = require("pg");
+const { Pool } = require("pg");
+const { sequelize, testConnection, syncModels } = require('./models/sequelize');
 require("dotenv").config({ path: "./database.env" });
 
 // Parse the DATABASE_URL manually to ensure credentials are handled correctly
@@ -13,8 +14,14 @@ const pool = new Pool({
 });
 
 // Test the connection
-pool.on('connect', () => {
-    console.log('Database connection established successfully');
+pool.on('connect', async () => {
+    console.log('PostgreSQL connection established successfully');
+    
+    // Once the raw connection is established, test Sequelize connection
+    await testConnection();
+    
+    // Sync Sequelize models
+    await syncModels(false); // Set to true to force recreate tables (will drop existing data)
 });
 
 pool.on('error', (err) => {

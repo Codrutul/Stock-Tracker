@@ -481,5 +481,17 @@ export const stockApi = {
             console.error('❌ Error fetching filtered and sorted stocks:', error);
             throw error;
         }
+    },
+
+    /**
+     * Ping the server to check if it is up
+     */
+    pingServer: async (): Promise<boolean> => {
+        try {
+            const response = await fetch(`${API_URL}/health`);
+            return response.ok;
+        } catch (error) {
+            return false;
+        }
     }
 }; 

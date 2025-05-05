@@ -3,7 +3,12 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const stockRoutes = require("./routes/stockRoutes");
 const fileRoutes = require("./routes/fileRoutes");
+const userRoutes = require("./routes/userRoutes");
+const tagRoutes = require("./routes/tagRoutes");
 const StockRepo = require("./models/StockRepo");
+const UserRepo = require("./models/UserRepo");
+const PortfolioRepo = require("./models/PortfolioRepo");
+const TagRepo = require("./models/TagRepo");
 const http = require("http");
 const WebSocket = require("ws");
 const { faker } = require("@faker-js/faker");
@@ -12,7 +17,7 @@ const { faker } = require("@faker-js/faker");
 dotenv.config({ path: "./database.env" });
 
 const app = express();
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -159,6 +164,17 @@ wss.on('connection', (ws) => {
     });
 });
 
+// Routes
+app.use('/api/stocks', stockRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/tags', tagRoutes);
+
+// Server health check endpoint
+app.get('/api/ping', (req, res) => {
+    res.status(200).json({ message: 'Server is online' });
+});
+
 // Broadcast data to all connected clients
 function broadcastData(data) {
     try {
@@ -279,44 +295,39 @@ async function startDataGenerationThread() {
     }
 }
 
-// Initialize database
-(async () => {
+// Initialize database tables
+async function initializeDatabaseTables() {
     try {
-        await StockRepo.initialize();
-        console.log("Database initialized successfully");
+        console.log('🔄 Initializing database tables...');
         
-        // Start the data generation thread
-        startDataGenerationThread();
+        // Initialize tables in the correct order (respecting foreign key constraints)
+        await StockRepo.initialize();
+        console.log('✅ Stocks table initialized');
+        
+        await UserRepo.initialize();
+        console.log('✅ Users table initialized');
+        
+        await PortfolioRepo.initialize();
+        console.log('✅ Portfolio table initialized');
+        
+        await TagRepo.initialize();
+        console.log('✅ Tag tables initialized');
+        
+        console.log('✅ All database tables initialized successfully');
     } catch (error) {
-        console.error("Failed to initialize database:", error);
+        console.error('❌ Error initializing database tables:', error);
     }
-})();
+}
 
-// Routes
-app.use("/api/stocks", stockRoutes);
-app.use("/api/files", fileRoutes);
-
-// Root route
-app.get("/", (req, res) => {
-    res.json({ message: "Welcome to the Stock-Tracker API" });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    const duration = Date.now() - (req.startTime || Date.now());
-    console.error(`❌ [${req.requestId || 'unknown'}] [${duration}ms] Error:`, err.stack);
-    res.status(500).json({
-        message: "Internal Server Error",
-        error: err.message
-    });
-});
-
-// Start server
-server.listen(PORT, () => {
-    console.log(`\n🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📚 API Documentation available at http://localhost:${PORT}/`);
-    console.log(`🔌 WebSocket server running on ws://localhost:${PORT}`);
-    console.log(`⌚ ${new Date().toISOString()}`);
+// Start the server
+server.listen(PORT, async () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    
+    // Initialize database tables when server starts
+    await initializeDatabaseTables();
+    
+    // Start data generation for WebSocket updates
+    startDataGenerationThread();
 });
 
 
