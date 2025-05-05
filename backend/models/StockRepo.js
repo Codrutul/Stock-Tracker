@@ -26,6 +26,10 @@ class StockRepo {
                     peRatio NUMERIC DEFAULT 0
                 )
             `);
+            
+            // Create indexes for better performance with large datasets
+            await this.createIndexes();
+            
             console.log('Stock table initialized');
             return true;
         } catch (error) {
@@ -34,6 +38,33 @@ class StockRepo {
             // Initialize with default data when database is not available
             this.initializeInMemoryData();
             return false;
+        }
+    }
+
+    // Create indexes for better query performance
+    async createIndexes() {
+        try {
+            // Create index on industry for faster filtering
+            await pool.query(`
+                CREATE INDEX IF NOT EXISTS idx_stocks_industry 
+                ON ${this.tableName}(industry)
+            `);
+            
+            // Create index on price for faster range queries
+            await pool.query(`
+                CREATE INDEX IF NOT EXISTS idx_stocks_price 
+                ON ${this.tableName}(price)
+            `);
+            
+            // Create index on marketCap for faster sorting
+            await pool.query(`
+                CREATE INDEX IF NOT EXISTS idx_stocks_market_cap 
+                ON ${this.tableName}(marketCap)
+            `);
+            
+            console.log('Stock table indexes created');
+        } catch (error) {
+            console.error('Error creating stock table indexes:', error);
         }
     }
 
@@ -82,10 +113,17 @@ class StockRepo {
         this.data = [apple, tesla, amazon];
     }
 
-    // Get all stocks
-    async getAllStocks() {
+    // Get all stocks with pagination for better performance
+    async getAllStocks(page = 1, limit = 100) {
         try {
-            const result = await pool.query(`SELECT * FROM ${this.tableName}`);
+            // Calculate offset based on page number
+            const offset = (page - 1) * limit;
+            
+            // Use pagination to limit results for better performance
+            const result = await pool.query(
+                `SELECT * FROM ${this.tableName} ORDER BY name LIMIT $1 OFFSET $2`,
+                [limit, offset]
+            );
             
             // Sanitize numeric values in the results
             const sanitizedRows = result.rows.map(row => {
@@ -100,17 +138,33 @@ class StockRepo {
         }
     }
 
-    // Get stocks by industry
-    async getStocksByIndustry(industry) {
+    // Get total count of stocks for pagination
+    async getTotalStockCount() {
+        try {
+            const result = await pool.query(`SELECT COUNT(*) FROM ${this.tableName}`);
+            return parseInt(result.rows[0].count);
+        } catch (error) {
+            console.error('Error getting total stock count:', error);
+            return this.data.length;
+        }
+    }
+
+    // Get stocks by industry with pagination
+    async getStocksByIndustry(industry, page = 1, limit = 100) {
         try {
             if (industry === 'All') {
-                return this.getAllStocks();
+                return this.getAllStocks(page, limit);
             }
+            
+            // Calculate offset based on page number
+            const offset = (page - 1) * limit;
+            
             const result = await pool.query(
-                `SELECT * FROM ${this.tableName} WHERE industry = $1`,
-                [industry]
+                `SELECT * FROM ${this.tableName} WHERE industry = $1 ORDER BY name LIMIT $2 OFFSET $3`,
+                [industry, limit, offset]
             );
-            return result.rows;
+            
+            return result.rows.map(row => this.sanitizeNumericValues(row));
         } catch (error) {
             console.error('Error getting stocks by industry:', error);
             if (industry === 'All') {
@@ -120,14 +174,20 @@ class StockRepo {
         }
     }
 
-    // Get stocks by price range
-    async getStocksByPriceRange(min, max) {
+    // Get stocks by price range with pagination
+    async getStocksByPriceRange(min, max, page = 1, limit = 100) {
         try {
+            // Calculate offset based on page number
+            const offset = (page - 1) * limit;
+            
             const result = await pool.query(
-                `SELECT * FROM ${this.tableName} WHERE price >= $1 AND price <= $2`,
-                [min, max]
+                `SELECT * FROM ${this.tableName} 
+                 WHERE price >= $1 AND price <= $2 
+                 ORDER BY price DESC LIMIT $3 OFFSET $4`,
+                [min, max, limit, offset]
             );
-            return result.rows;
+            
+            return result.rows.map(row => this.sanitizeNumericValues(row));
         } catch (error) {
             console.error('Error getting stocks by price range:', error);
             return this.data.filter(stock => stock.price >= min && stock.price <= max);
@@ -181,7 +241,12 @@ class StockRepo {
                 `SELECT * FROM ${this.tableName} WHERE name = $1`,
                 [name]
             );
-            return result.rows[0];
+            
+            if (result.rows.length === 0) {
+                return null;
+            }
+            
+            return this.sanitizeNumericValues(result.rows[0]);
         } catch (error) {
             console.error('Error getting stock by name:', error);
             return this.data.find(stock => stock.name === name);
@@ -208,7 +273,12 @@ class StockRepo {
             `;
             
             const result = await pool.query(query, [name, ...values]);
-            return result.rows[0];
+            
+            if (result.rows.length === 0) {
+                return null;
+            }
+            
+            return this.sanitizeNumericValues(result.rows[0]);
         } catch (error) {
             console.error('Error updating stock:', error);
             // Update in-memory data if database fails
@@ -256,7 +326,12 @@ class StockRepo {
                 `DELETE FROM ${this.tableName} WHERE name = $1 RETURNING *`,
                 [name]
             );
-            return result.rows[0];
+            
+            if (result.rows.length === 0) {
+                return null;
+            }
+            
+            return this.sanitizeNumericValues(result.rows[0]);
         } catch (error) {
             console.error('Error deleting stock:', error);
             // Delete from in-memory data if database fails
@@ -273,6 +348,7 @@ class StockRepo {
     // Check if stock exists by name
     async stockExists(name) {
         try {
+            // More efficient query for checking existence
             const result = await pool.query(
                 `SELECT EXISTS(SELECT 1 FROM ${this.tableName} WHERE name = $1)`,
                 [name]
@@ -282,6 +358,86 @@ class StockRepo {
             console.error('Error checking if stock exists:', error);
             // Check in-memory data if database fails
             return this.data.some(stock => stock.name === name);
+        }
+    }
+    
+    // Get filtered and sorted stocks with pagination
+    async getFilteredAndSortedStocks({
+        industry = null,
+        minPrice = 0,
+        maxPrice = Number.MAX_SAFE_INTEGER,
+        sortBy = 'name',
+        sortDirection = 'ASC',
+        page = 1,
+        limit = 100
+    }) {
+        try {
+            // Build the query dynamically based on filters
+            let query = `SELECT * FROM ${this.tableName} WHERE 1=1`;
+            const params = [];
+            let paramIndex = 1;
+            
+            // Add industry filter if specified
+            if (industry && industry !== 'All') {
+                query += ` AND industry = $${paramIndex++}`;
+                params.push(industry);
+            }
+            
+            // Add price range filter
+            query += ` AND price >= $${paramIndex++} AND price <= $${paramIndex++}`;
+            params.push(minPrice, maxPrice);
+            
+            // Validate sortBy to prevent SQL injection
+            const validSortColumns = ['name', 'price', 'marketCap', 'change', 'dividendAmount', 'amount_owned'];
+            const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'name';
+            
+            // Validate sort direction
+            const direction = (sortDirection.toUpperCase() === 'DESC') ? 'DESC' : 'ASC';
+            
+            // Add sorting
+            query += ` ORDER BY ${sortColumn} ${direction}`;
+            
+            // Add pagination
+            const offset = (page - 1) * limit;
+            query += ` LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+            params.push(limit, offset);
+            
+            console.log('Executing query:', query, 'with params:', params);
+            
+            const result = await pool.query(query, params);
+            return result.rows.map(row => this.sanitizeNumericValues(row));
+        } catch (error) {
+            console.error('Error getting filtered and sorted stocks:', error);
+            return this.data;
+        }
+    }
+    
+    // Get total count of filtered stocks for pagination
+    async getFilteredStockCount({
+        industry = null,
+        minPrice = 0,
+        maxPrice = Number.MAX_SAFE_INTEGER
+    }) {
+        try {
+            let query = `SELECT COUNT(*) FROM ${this.tableName} WHERE 1=1`;
+            const params = [];
+            let paramIndex = 1;
+            
+            // Add industry filter if specified
+            if (industry && industry !== 'All') {
+                query += ` AND industry = $${paramIndex++}`;
+                params.push(industry);
+            }
+            
+            // Add price range filter
+            query += ` AND price >= $${paramIndex++} AND price <= $${paramIndex++}`;
+            params.push(minPrice, maxPrice);
+            
+            const result = await pool.query(query, params);
+            return parseInt(result.rows[0].count);
+        } catch (error) {
+            console.error('Error getting filtered stock count:', error);
+            return this.data.length;
         }
     }
 }

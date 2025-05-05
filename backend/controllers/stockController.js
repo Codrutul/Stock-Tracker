@@ -36,11 +36,36 @@ const generateRandomStock = (name) => {
     };
 };
 
-// Get all stocks
+// Get all stocks with pagination
 exports.getAllStocks = async (req, res) => {
     try {
-        const stocks = await StockRepo.getAllStocks();
-        res.status(200).json(stocks);
+        // Extract pagination parameters from query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
+        
+        // Validate pagination parameters
+        if (page < 1 || limit < 1 || limit > 500) {
+            return res.status(400).json({ 
+                message: 'Invalid pagination parameters. Page must be >= 1 and limit must be between 1 and 500.' 
+            });
+        }
+        
+        // Get stocks with pagination
+        const stocks = await StockRepo.getAllStocks(page, limit);
+        
+        // Get total count for pagination metadata
+        const totalStocks = await StockRepo.getTotalStockCount();
+        const totalPages = Math.ceil(totalStocks / limit);
+        
+        res.status(200).json({
+            data: stocks,
+            pagination: {
+                page,
+                limit,
+                totalItems: totalStocks,
+                totalPages
+            }
+        });
     } catch (error) {
         console.error('Error in getAllStocks controller:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -174,64 +199,130 @@ exports.deleteStock = async (req, res) => {
     }
 };
 
-// Get stocks by industry
+// Get stocks by industry with pagination
 exports.getStocksByIndustry = async (req, res) => {
     try {
         const { industry } = req.params;
-        const stocks = await StockRepo.getStocksByIndustry(industry);
-        res.status(200).json(stocks);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
+        
+        // Validate pagination parameters
+        if (page < 1 || limit < 1 || limit > 500) {
+            return res.status(400).json({ 
+                message: 'Invalid pagination parameters. Page must be >= 1 and limit must be between 1 and 500.' 
+            });
+        }
+        
+        const stocks = await StockRepo.getStocksByIndustry(industry, page, limit);
+        
+        // Get total count for industry for pagination
+        const totalStocks = industry === 'All' 
+            ? await StockRepo.getTotalStockCount()
+            : await StockRepo.getFilteredStockCount({ industry });
+            
+        const totalPages = Math.ceil(totalStocks / limit);
+        
+        res.status(200).json({
+            data: stocks,
+            pagination: {
+                page,
+                limit,
+                totalItems: totalStocks,
+                totalPages
+            }
+        });
     } catch (error) {
         console.error('Error in getStocksByIndustry controller:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
 
-// Get stocks by price range
+// Get stocks by price range with pagination
 exports.getStocksByPriceRange = async (req, res) => {
     try {
         const { min = 0, max = Number.MAX_SAFE_INTEGER } = req.query;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
         
+        // Validate price range parameters
         if (isNaN(min) || isNaN(max)) {
             return res.status(400).json({ message: 'Min and max must be numbers' });
         }
         
-        const stocks = await StockRepo.getStocksByPriceRange(min, max);
-        res.status(200).json(stocks);
+        // Validate pagination parameters
+        if (page < 1 || limit < 1 || limit > 500) {
+            return res.status(400).json({ 
+                message: 'Invalid pagination parameters. Page must be >= 1 and limit must be between 1 and 500.' 
+            });
+        }
+        
+        const minPrice = parseFloat(min);
+        const maxPrice = parseFloat(max);
+        
+        const stocks = await StockRepo.getStocksByPriceRange(minPrice, maxPrice, page, limit);
+        
+        // Get total count for price range for pagination
+        const totalStocks = await StockRepo.getFilteredStockCount({ 
+            minPrice, 
+            maxPrice 
+        });
+        
+        const totalPages = Math.ceil(totalStocks / limit);
+        
+        res.status(200).json({
+            data: stocks,
+            pagination: {
+                page,
+                limit,
+                totalItems: totalStocks,
+                totalPages,
+                priceRange: { min: minPrice, max: maxPrice }
+            }
+        });
     } catch (error) {
         console.error('Error in getStocksByPriceRange controller:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
 
-// Get sorted stocks
+// Get sorted stocks (replaced with optimized filtered and sorted method)
 exports.getSortedStocks = async (req, res) => {
     try {
         const { sortBy } = req.params;
-        const stocks = await StockRepo.getAllStocks();
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
         
-        // Sort based on different criteria
-        switch (sortBy) {
-            case 'price':
-                stocks.sort((a, b) => b.price - a.price);
-                break;
-            case 'marketCap':
-                stocks.sort((a, b) => b.marketCap - a.marketCap);
-                break;
-            case 'change':
-                stocks.sort((a, b) => b.change - a.change);
-                break;
-            case 'dividendAmount':
-                stocks.sort((a, b) => b.dividendAmount - a.dividendAmount);
-                break;
-            case 'amount_owned':
-                stocks.sort((a, b) => b.amount_owned - a.amount_owned);
-                break;
-            default:
-                // Default sort by name
-                stocks.sort((a, b) => a.name.localeCompare(b.name));
+        // Validate pagination parameters
+        if (page < 1 || limit < 1 || limit > 500) {
+            return res.status(400).json({ 
+                message: 'Invalid pagination parameters. Page must be >= 1 and limit must be between 1 and 500.' 
+            });
         }
         
-        res.status(200).json(stocks);
+        // Use the optimized filtered and sorted method
+        const sortDirection = req.query.direction || 'ASC';
+        const stocks = await StockRepo.getFilteredAndSortedStocks({
+            sortBy,
+            sortDirection,
+            page,
+            limit
+        });
+        
+        // Get total count for pagination
+        const totalStocks = await StockRepo.getTotalStockCount();
+        const totalPages = Math.ceil(totalStocks / limit);
+        
+        res.status(200).json({
+            data: stocks,
+            pagination: {
+                page,
+                limit,
+                totalItems: totalStocks,
+                totalPages,
+                sortBy,
+                sortDirection
+            }
+        });
     } catch (error) {
         console.error('Error in getSortedStocks controller:', error);
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -280,58 +371,77 @@ exports.updateStockAmount = async (req, res) => {
     }
 };
 
-// Get filtered and sorted stocks
+// Get filtered and sorted stocks with pagination
 exports.getFilteredAndSortedStocks = async (req, res) => {
     try {
-        const { industry, min = 0, max = Number.MAX_SAFE_INTEGER, sortBy = 'name' } = req.query;
+        const { 
+            industry, 
+            min, 
+            max, 
+            sortBy = 'name', 
+            direction = 'ASC',
+            page = 1,
+            limit = 100
+        } = req.query;
         
-        console.log(`Processing filtered and sorted request:`, { industry, min, max, sortBy });
+        console.log(`Processing filtered and sorted request:`, { 
+            industry, min, max, sortBy, direction, page, limit 
+        });
         
-        // Validate numeric parameters
-        const minPrice = parseFloat(min);
-        const maxPrice = parseFloat(max);
+        // Parse and validate numeric parameters
+        const minPrice = min !== undefined ? parseFloat(min) : 0;
+        const maxPrice = max !== undefined ? parseFloat(max) : Number.MAX_SAFE_INTEGER;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
         
         if (isNaN(minPrice) || isNaN(maxPrice)) {
             return res.status(400).json({ message: 'Min and max must be numbers' });
         }
         
-        // Get all stocks first
-        let stocks = await StockRepo.getAllStocks();
-        
-        // Apply industry filter if specified
-        if (industry && industry !== 'All') {
-            stocks = stocks.filter(stock => stock.industry === industry);
-            console.log(`Filtered by industry ${industry}: ${stocks.length} stocks remaining`);
+        // Validate pagination parameters
+        if (pageNum < 1 || limitNum < 1 || limitNum > 500) {
+            return res.status(400).json({ 
+                message: 'Invalid pagination parameters. Page must be >= 1 and limit must be between 1 and 500.' 
+            });
         }
         
-        // Apply price range filter
-        stocks = stocks.filter(stock => stock.price >= minPrice && stock.price <= maxPrice);
-        console.log(`Filtered by price range ${minPrice}-${maxPrice}: ${stocks.length} stocks remaining`);
+        // Use the optimized repository method
+        const stocks = await StockRepo.getFilteredAndSortedStocks({
+            industry: industry === 'All' ? null : industry,
+            minPrice,
+            maxPrice,
+            sortBy,
+            sortDirection: direction,
+            page: pageNum,
+            limit: limitNum
+        });
         
-        // Apply sorting
-        switch (sortBy) {
-            case 'price':
-                stocks.sort((a, b) => b.price - a.price);
-                break;
-            case 'marketCap':
-                stocks.sort((a, b) => b.marketCap - a.marketCap);
-                break;
-            case 'change':
-                stocks.sort((a, b) => b.change - a.change);
-                break;
-            case 'dividendAmount':
-                stocks.sort((a, b) => b.dividendAmount - a.dividendAmount);
-                break;
-            case 'amount_owned':
-                stocks.sort((a, b) => b.amount_owned - a.amount_owned);
-                break;
-            default:
-                // Default sort by name
-                stocks.sort((a, b) => a.name.localeCompare(b.name));
-        }
-        console.log(`Sorted by ${sortBy}: returning ${stocks.length} stocks`);
+        // Get total count for filtered results
+        const totalStocks = await StockRepo.getFilteredStockCount({
+            industry: industry === 'All' ? null : industry,
+            minPrice,
+            maxPrice
+        });
         
-        res.status(200).json(stocks);
+        const totalPages = Math.ceil(totalStocks / limitNum);
+        
+        res.status(200).json({
+            data: stocks,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                totalItems: totalStocks,
+                totalPages,
+                filters: {
+                    industry: industry || 'All',
+                    priceRange: { min: minPrice, max: maxPrice }
+                },
+                sorting: {
+                    sortBy,
+                    direction
+                }
+            }
+        });
     } catch (error) {
         console.error('Error in getFilteredAndSortedStocks controller:', error);
         res.status(500).json({ message: 'Server error', error: error.message });

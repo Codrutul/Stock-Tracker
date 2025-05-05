@@ -1,0 +1,111 @@
+{
+  "timestamp": "2025-05-05T09:22:08.795Z",
+  "results": [
+    {
+      "description": "Get all stocks (no limit)",
+      "averageTime": 558.5426,
+      "successRate": "5/5",
+      "times": [
+        627.4679000000001,
+        543.0943000000001,
+        582.6889000000001,
+        533.7253999999998,
+        505.7365
+      ],
+      "rowCount": 100020
+    },
+    {
+      "description": "Get all stocks (with limit)",
+      "averageTime": 1.5059399999999186,
+      "successRate": "5/5",
+      "times": [
+        3.101599999999962,
+        1.3710999999998421,
+        1.0138999999999214,
+        0.9258999999997286,
+        1.117200000000139
+      ],
+      "rowCount": 100
+    },
+    {
+      "description": "Get stocks by industry",
+      "averageTime": 1.4964399999999842,
+      "successRate": "5/5",
+      "times": [
+        1.7691999999997279,
+        0.9576000000001841,
+        2.728099999999813,
+        1.1006000000002132,
+        0.9266999999999825
+      ],
+      "rowCount": 100
+    },
+    {
+      "description": "Get stocks by price range",
+      "averageTime": 0.9003999999999905,
+      "successRate": "5/5",
+      "times": [
+        1.0376999999998588,
+        0.955000000000382,
+        0.7959000000000742,
+        0.8215999999997621,
+        0.8917999999998756
+      ],
+      "rowCount": 100
+    },
+    {
+      "description": "Get stocks sorted by market cap",
+      "averageTime": null,
+      "successRate": "0/5",
+      "times": [],
+      "rowCount": 0
+    },
+    {
+      "description": "Get stocks with complex filtering",
+      "averageTime": null,
+      "successRate": "0/5",
+      "times": [],
+      "rowCount": 0
+    },
+    {
+      "description": "Join query - stocks with portfolios",
+      "averageTime": null,
+      "successRate": "0/5",
+      "times": [],
+      "rowCount": 0
+    },
+    {
+      "description": "Complex query with multiple joins",
+      "averageTime": null,
+      "successRate": "0/5",
+      "times": [],
+      "rowCount": 0
+    },
+    {
+      "description": "Counting records with grouping",
+      "averageTime": 48.01696000000011,
+      "successRate": "5/5",
+      "times": [
+        99.15929999999935,
+        35.1216000000004,
+        32.60810000000038,
+        38.944800000000214,
+        34.251000000000204
+      ],
+      "rowCount": 20
+    },
+    {
+      "description": "Stock lookup by name",
+      "averageTime": 0.47440000000005966,
+      "successRate": "5/5",
+      "times": [
+        0.9985999999998967,
+        0.3603000000002794,
+        0.42370000000028085,
+        0.33249999999952706,
+        0.2569000000003143
+      ],
+      "rowCount": 0
+    }
+  ]
+}

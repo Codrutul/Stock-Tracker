@@ -8,7 +8,11 @@
     "dev": "nodemon server.js",
     "test": "jest --watchAll",
     "test:coverage": "jest --coverage",
-    "init-db": "node scripts/init-db.js"
+    "init-db": "node scripts/init-db.js",
+    "generate-data": "node scripts/generate-massive-data.js",
+    "optimize-db": "node scripts/optimize-database.js",
+    "test-performance": "node scripts/test-database-performance.js",
+    "silver-tier": "npm run generate-data && npm run optimize-db && npm run test-performance"
   },
   "keywords": [],
   "author": "",
