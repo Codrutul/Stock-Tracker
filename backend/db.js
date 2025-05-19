@@ -18,7 +18,7 @@ try {
         // Increase connection timeout to 30 seconds
         connectionTimeoutMillis: 30000,
         // Add SSL if needed (common for production)
-        // ssl: { rejectUnauthorized: false },
+        ssl: { rejectUnauthorized: false },
         // Add retry logic
         max: 20, // Maximum number of clients in the pool
         idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
