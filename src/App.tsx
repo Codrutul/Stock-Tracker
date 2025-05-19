@@ -21,7 +21,9 @@ import StockBarChart from "./components/StockBarChart.tsx";
 import { StockGenerator } from "./utils/StockGenerator.ts";
 import { stockApi } from "./utils/api.ts";
 import FileManager from "./pages/FileManager.tsx";
+import AdminMonitoring from "./pages/AdminMonitoring.tsx";
 import { websocketService, WebSocketEvent } from "./utils/websocket.ts";
+import { useAuth } from "./context/AuthContext";
 
 interface Option {
   value: string;
@@ -91,7 +93,7 @@ function App() {
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [priceRange, setPriceRange] = useState({ min: 0, max: 9999999999999 });
   const [isLoading, setIsLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'portfolio' | 'fileManager'>('portfolio');
+  const [currentPage, setCurrentPage] = useState<'portfolio' | 'fileManager' | 'adminMonitoring'>('portfolio');
   const [isRealTimeUpdatesEnabled, setIsRealTimeUpdatesEnabled] = useState(true);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const [showUpdateBadge, setShowUpdateBadge] = useState(false);
@@ -99,16 +101,30 @@ function App() {
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(navigator.onLine);
   const [isServerOnline, setIsServerOnline] = useState<boolean>(true);
 
-  // Effect to fetch all stocks on initial load
+  const { user, isAuthenticated, logout } = useAuth();
+
+  // Effect to fetch all stocks on initial load and when auth state changes
   useEffect(() => {
     const fetchStocks = async () => {
       try {
         console.log('🔄 App: Fetching all stocks from backend...');
         setIsLoading(true);
         const stocks = await stockApi.getAllStocks();
-        setStockList(new StockRepo(stocks));
-        console.log(`✅ App: Successfully loaded ${stocks.length} stocks`);
-        showNotification("Stocks loaded successfully", "success");
+        
+        if (stocks.length > 0) {
+          setStockList(new StockRepo(stocks));
+          
+          // Select the first stock if none is selected
+          if (!selectedStock) {
+            setSelectedStock(stocks[0]);
+          }
+          
+          console.log(`✅ App: Successfully loaded ${stocks.length} stocks`);
+          showNotification("Stocks loaded successfully", "success");
+        } else {
+          console.log('⚠️ App: No stocks returned from backend');
+          showNotification("No stocks found in the database", "info");
+        }
       } catch (error) {
         console.error("❌ App: Error fetching stocks:", error);
         showNotification("Failed to load stocks from server", "error");
@@ -117,8 +133,9 @@ function App() {
       }
     };
 
+    // Fetch stocks on mount and when auth state changes
     fetchStocks();
-  }, []);
+  }, [isAuthenticated]); // Re-fetch when auth state changes
   
   // Initialize WebSocket connection
   useEffect(() => {
@@ -251,6 +268,10 @@ function App() {
         console.log(`🔄 App: Fetching filtered and sorted stocks...`);
         console.log(`   Filter: ${filterValue}, Price Range: ${priceRange.min}-${priceRange.max}, Sort: ${sortOption}`);
         setIsLoading(true);
+        
+        // Show temporary notification
+        showNotification(`Sorting by ${sortOption}...`, "info");
+        
         const stocks = await stockApi.getFilteredAndSortedStocks(
           filterValue,
           priceRange.min,
@@ -262,6 +283,12 @@ function App() {
         const updatedRepo = new StockRepo(stocks);
         setStockList(updatedRepo);
         console.log(`✅ App: Successfully loaded ${stocks.length} filtered/sorted stocks`);
+        
+        if (stocks.length === 0) {
+          showNotification("No stocks match your filters", "info");
+        } else {
+          showNotification(`Sorted by ${sortOption}`, "success");
+        }
         
         // Update selected stock if needed
         if (stocks.length > 0) {
@@ -401,10 +428,12 @@ function App() {
   };
 
   const handleFilterChange = (filterOption: string) => {
+    console.log(`🔄 App: Filter changed to: ${filterOption}`);
     setFilterValue(filterOption);
   };
 
   const handleSortChange = (sortOption: string) => {
+    console.log(`🔄 App: Sort changed to: ${sortOption}`);
     setSortOption(sortOption);
   };
 
@@ -584,6 +613,13 @@ function App() {
             darkMode={darkMode}
             onClick={() => setCurrentPage('portfolio')}
           />
+          {isAuthenticated && user?.role === 'admin' && (
+            <Button_new
+              name="Admin Monitoring"
+              darkMode={darkMode}
+              onClick={() => setCurrentPage('adminMonitoring')}
+            />
+          )}
           <Button_new
             name={isRealTimeUpdatesEnabled ? "Disable Updates" : "Enable Updates"}
             darkMode={darkMode}
@@ -599,6 +635,42 @@ function App() {
                 </span>
               )}
             </div>
+          )}
+          {isAuthenticated ? (
+            <>
+              <Button_new
+                name={`Hello, ${user?.username}`}
+                darkMode={darkMode}
+                onClick={() => {
+                  window.location.href = '/profile';
+                }}
+              />
+              <Button_new
+                name="Logout"
+                darkMode={darkMode}
+                onClick={() => {
+                  logout();
+                  window.location.href = '/login';
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <Button_new
+                name="Login"
+                darkMode={darkMode}
+                onClick={() => {
+                  window.location.href = '/login';
+                }}
+              />
+              <Button_new
+                name="Register"
+                darkMode={darkMode}
+                onClick={() => {
+                  window.location.href = '/register';
+                }}
+              />
+            </>
           )}
         </div>
         {currentPage === 'portfolio' && (
@@ -698,8 +770,10 @@ function App() {
             }}
           />
         </div>
-      ) : (
+      ) : currentPage === 'fileManager' ? (
         <FileManager />
+      ) : (
+        <AdminMonitoring />
       )}
 
       <Modal

@@ -94,16 +94,19 @@ exports.createStock = async (req, res) => {
     try {
         const stockData = req.body;
         
-        console.log('Received create stock request:', stockData);
+        console.log('📝 Received create stock request:', JSON.stringify(stockData));
+        console.log('👤 User info:', req.user ? `ID: ${req.user.id}, Username: ${req.user.username}` : 'No user info available');
         
         // Validate required fields
         if (!stockData.name) {
+            console.log('❌ Stock creation failed: Missing name');
             return res.status(400).json({ message: 'Stock name is required' });
         }
         
         // Check if stock already exists
         const exists = await StockRepo.stockExists(stockData.name);
         if (exists) {
+            console.log(`❌ Stock creation failed: Stock '${stockData.name}' already exists`);
             return res.status(409).json({ message: `Stock '${stockData.name}' already exists` });
         }
         
@@ -111,7 +114,7 @@ exports.createStock = async (req, res) => {
         let stockToAdd = stockData;
         
         if (Object.keys(stockData).length === 1 && stockData.name) {
-            console.log(`Generating random data for stock: ${stockData.name}`);
+            console.log(`🎲 Generating random data for stock: ${stockData.name}`);
             stockToAdd = generateRandomStock(stockData.name);
         } else {
             // Ensure all fields are properly set with default values if needed
@@ -130,21 +133,58 @@ exports.createStock = async (req, res) => {
         }
         
         // Log the actual values to verify they are set correctly
-        console.log('Stock data to be added:', {
+        console.log('📊 Stock data to be added:', {
             ...stockToAdd,
             marketCap: `${stockToAdd.marketCap} (formatted: ${formatMarketCap(stockToAdd.marketCap)})`,
             dividendAmount: `${stockToAdd.dividendAmount} (formatted: ${stockToAdd.dividendAmount.toFixed(2)})`,
             peRatio: `${stockToAdd.peRatio} (formatted: ${stockToAdd.peRatio.toFixed(2)})`
         });
         
+        // Make sure the database table exists
+        await StockRepo.initialize();
+        
         const newStock = await StockRepo.addStock(stockToAdd);
-        console.log('Successfully created stock:', newStock);
+        
+        if (!newStock) {
+            console.log(`❌ Failed to add stock: ${stockData.name}`);
+            return res.status(500).json({ message: `Failed to add stock '${stockData.name}'` });
+        }
+        
+        console.log('✅ Successfully created stock:', newStock);
+        
+        // Broadcast to WebSocket clients that a new stock was added
+        broadcastNewStock(newStock);
+        
         res.status(201).json(newStock);
     } catch (error) {
-        console.error('Error in createStock controller:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error('❌ Error in createStock controller:', error);
+        res.status(500).json({ 
+            message: 'Failed to add stock',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
+
+// Helper function to broadcast a new stock to WebSocket clients
+// Define this at the module level
+function broadcastNewStock(stock) {
+    try {
+        // Check if the WebSocket broadcast function exists (it should be imported or provided)
+        if (typeof global.broadcastData === 'function') {
+            global.broadcastData({
+                type: 'newStock',
+                stock: stock
+            });
+            console.log('📡 Broadcasted new stock to connected clients');
+        } else {
+            console.log('⚠️ WebSocket broadcast function not available');
+        }
+    } catch (error) {
+        console.error('❌ Error broadcasting new stock:', error);
+        // Don't throw the error as broadcasting is optional
+    }
+}
 
 // Helper function to format market cap for logging
 function formatMarketCap(marketCap) {
@@ -185,17 +225,37 @@ exports.deleteStock = async (req, res) => {
     try {
         const { name } = req.params;
         
+        console.log(`🔄 Attempting to delete stock: ${name}`);
+        
         // Check if stock exists
         const exists = await StockRepo.stockExists(name);
         if (!exists) {
+            console.log(`❌ Stock not found: ${name}`);
             return res.status(404).json({ message: `Stock '${name}' not found` });
         }
         
+        console.log(`✅ Stock exists, proceeding with deletion: ${name}`);
+        
+        // Get the stock before deletion for logging purposes
+        const stockBeforeDeletion = await StockRepo.getStockByName(name);
+        console.log('Stock to be deleted:', stockBeforeDeletion);
+        
         const deletedStock = await StockRepo.deleteStock(name);
+        
+        if (!deletedStock) {
+            console.log(`❌ Deletion failed for stock: ${name}`);
+            return res.status(500).json({ message: `Failed to delete stock '${name}'` });
+        }
+        
+        console.log(`✅ Successfully deleted stock: ${name}`);
         res.status(200).json({ message: `Stock '${name}' deleted successfully`, deletedStock });
     } catch (error) {
-        console.error('Error in deleteStock controller:', error);
-        res.status(500).json({ message: 'Server error', error: error.message });
+        console.error(`❌ Error in deleteStock controller for ${req.params.name}:`, error);
+        res.status(500).json({ 
+            message: `Error removing ${req.params.name}`,
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
 
@@ -350,18 +410,53 @@ exports.updateStockAmount = async (req, res) => {
         
         // Check if stock exists
         const exists = await StockRepo.stockExists(name);
+        console.log(`Stock '${name}' exists check result: ${exists}`);
+        
         if (!exists) {
+            console.log(`Stock '${name}' not found in database, checking in-memory fallback...`);
+            // Try to add the stock if it doesn't exist (could be using in-memory data)
+            try {
+                const randomStock = generateRandomStock(name);
+                const newStock = await StockRepo.addStock(randomStock);
+                
+                if (newStock) {
+                    console.log(`Created new stock '${name}' since it didn't exist`);
+                    
+                    // Update the newly created stock
+                    const updatedStock = await StockRepo.updateStock(name, {
+                        ...newStock,
+                        amount_owned: parsedAmount
+                    });
+                    
+                    console.log('Successfully updated stock amount:', updatedStock);
+                    return res.status(200).json(updatedStock);
+                }
+            } catch (createError) {
+                console.error(`Failed to create missing stock: ${createError.message}`);
+            }
+            
             return res.status(404).json({ message: `Stock '${name}' not found` });
         }
         
         // Get current stock to preserve other values
         const currentStock = await StockRepo.getStockByName(name);
+        console.log(`Current stock data for '${name}':`, currentStock);
+        
+        if (!currentStock) {
+            console.error(`Stock exists check passed but getStockByName failed for '${name}'`);
+            return res.status(404).json({ message: `Stock '${name}' exists but data could not be retrieved` });
+        }
         
         // Update only the amount owned
         const updatedStock = await StockRepo.updateStock(name, {
             ...currentStock,
             amount_owned: parsedAmount
         });
+        
+        if (!updatedStock) {
+            console.error(`Failed to update stock '${name}', database may be inconsistent`);
+            return res.status(500).json({ message: `Failed to update stock '${name}'` });
+        }
         
         console.log('Successfully updated stock amount:', updatedStock);
         res.status(200).json(updatedStock);
@@ -405,12 +500,30 @@ exports.getFilteredAndSortedStocks = async (req, res) => {
             });
         }
         
+        // Map frontend sort options to database column names
+        let dbSortBy = 'name';
+        console.log(`Received sortBy parameter: "${sortBy}"`);
+        
+        // Check if sortBy is already a column name (from API) or a UI label (from frontend)
+        if (['name', 'price', 'marketCap', 'change', 'dividendAmount', 'amount_owned'].includes(sortBy)) {
+            dbSortBy = sortBy;
+        } else {
+            // Handle UI labels
+            if (sortBy === 'Stock Price') dbSortBy = 'price';
+            else if (sortBy === 'Company Market Cap') dbSortBy = 'marketCap';
+            else if (sortBy === 'Growth in the last month') dbSortBy = 'change';
+            else if (sortBy === 'Dividend amount') dbSortBy = 'dividendAmount';
+            else if (sortBy === 'Amount owned') dbSortBy = 'amount_owned';
+        }
+        
+        console.log(`Mapped sortBy parameter "${sortBy}" to database column "${dbSortBy}"`);
+        
         // Use the optimized repository method
         const stocks = await StockRepo.getFilteredAndSortedStocks({
             industry: industry === 'All' ? null : industry,
             minPrice,
             maxPrice,
-            sortBy,
+            sortBy: dbSortBy,
             sortDirection: direction,
             page: pageNum,
             limit: limitNum
@@ -425,6 +538,8 @@ exports.getFilteredAndSortedStocks = async (req, res) => {
         
         const totalPages = Math.ceil(totalStocks / limitNum);
         
+        console.log(`Found ${stocks.length} stocks matching criteria. Total count: ${totalStocks}`);
+        
         res.status(200).json({
             data: stocks,
             pagination: {
@@ -437,7 +552,7 @@ exports.getFilteredAndSortedStocks = async (req, res) => {
                     priceRange: { min: minPrice, max: maxPrice }
                 },
                 sorting: {
-                    sortBy,
+                    sortBy: dbSortBy,
                     direction
                 }
             }

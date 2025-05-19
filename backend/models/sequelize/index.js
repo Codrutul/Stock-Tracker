@@ -6,7 +6,7 @@ dotenv.config({ path: "./database.env" });
 
 // Create Sequelize instance
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
-    logging: console.log,
+    logging: false,
     dialectOptions: {
         // SSL configuration if needed
         // ssl: {

@@ -2,12 +2,16 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const portfolioController = require('../controllers/portfolioController');
+const { authenticateToken, isAdmin } = require('../middlewares/auth');
+
+// All user routes require authentication
+router.use(authenticateToken);
 
 // User routes
-router.get('/', userController.getAllUsers);
+router.get('/', isAdmin, userController.getAllUsers); // Admin only
 router.get('/:id', userController.getUserById);
 router.get('/username/:username', userController.getUserByUsername);
-router.post('/', userController.createUser);
+router.post('/', isAdmin, userController.createUser); // Admin only
 router.put('/:id', userController.updateUser);
 router.delete('/:id', userController.deleteUser);
 

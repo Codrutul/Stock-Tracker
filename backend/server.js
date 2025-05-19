@@ -5,13 +5,21 @@ const stockRoutes = require("./routes/stockRoutes");
 const fileRoutes = require("./routes/fileRoutes");
 const userRoutes = require("./routes/userRoutes");
 const tagRoutes = require("./routes/tagRoutes");
+const authRoutes = require("./routes/authRoutes");
+const activityRoutes = require("./routes/activityRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const monitoringRoutes = require("./routes/monitoringRoutes");
 const StockRepo = require("./models/StockRepo");
 const UserRepo = require("./models/UserRepo");
 const PortfolioRepo = require("./models/PortfolioRepo");
 const TagRepo = require("./models/TagRepo");
+const MonitoredUserRepo = require("./models/MonitoredUserRepo");
+const SuspiciousActivityMonitor = require("./services/SuspiciousActivityMonitor");
+const { initializeActivityLogging, logActivity } = require("./middlewares/auth");
 const http = require("http");
 const WebSocket = require("ws");
 const { faker } = require("@faker-js/faker");
+const dataSyncService = require('./services/DataSyncService');
 
 // Load environment variables from .env file
 dotenv.config({ path: "./database.env" });
@@ -117,6 +125,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// Global activity logging middleware (applies after route handlers)
+app.use(logActivity);
+
 // Store connected WebSocket clients
 const clients = new Set();
 
@@ -169,6 +180,10 @@ app.use('/api/stocks', stockRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/activity', activityRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 
 // Server health check endpoint
 app.get('/api/ping', (req, res) => {
@@ -214,6 +229,9 @@ function broadcastData(data) {
         console.error('Error broadcasting data:', error);
     }
 }
+
+// Make broadcastData available globally
+global.broadcastData = broadcastData;
 
 // Function to generate random stock price changes
 function generateStockUpdates() {
@@ -285,8 +303,8 @@ async function startDataGenerationThread() {
                 });
             }
             
-            // Wait for 10 seconds between updates
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            // Wait for 30 seconds between updates (increased from 10 seconds)
+            await new Promise(resolve => setTimeout(resolve, 30000));
         } catch (error) {
             console.error('Error in data generation thread:', error);
             // Wait a bit before trying again
@@ -298,36 +316,66 @@ async function startDataGenerationThread() {
 // Initialize database tables
 async function initializeDatabaseTables() {
     try {
-        console.log('🔄 Initializing database tables...');
-        
-        // Initialize tables in the correct order (respecting foreign key constraints)
-        await StockRepo.initialize();
-        console.log('✅ Stocks table initialized');
-        
-        await UserRepo.initialize();
-        console.log('✅ Users table initialized');
-        
-        await PortfolioRepo.initialize();
-        console.log('✅ Portfolio table initialized');
-        
-        await TagRepo.initialize();
-        console.log('✅ Tag tables initialized');
-        
-        console.log('✅ All database tables initialized successfully');
+        console.log('Initializing database tables...');
+         
+        // Initialize user activity logging table
+        await initializeActivityLogging();
+         
+        // Initialize monitoring tables
+        await MonitoredUserRepo.initialize();
+         
+        // Initialize existing repo tables
+        const stocksInitialized = await StockRepo.initialize();
+        const usersInitialized = await UserRepo.initialize();
+        const portfolioInitialized = await PortfolioRepo.initialize();
+        const tagsInitialized = await TagRepo.initialize();
+         
+        console.log(`Database tables initialized: 
+            - Stocks: ${stocksInitialized ? '✅' : '❌'}
+            - Users: ${usersInitialized ? '✅' : '❌'}
+            - Portfolio: ${portfolioInitialized ? '✅' : '❌'}
+            - Tags: ${tagsInitialized ? '✅' : '❌'}
+            - Monitoring: ${await MonitoredUserRepo.initialize() ? '✅' : '❌'}
+        `);
+         
+        return stocksInitialized && usersInitialized && portfolioInitialized && tagsInitialized;
     } catch (error) {
-        console.error('❌ Error initializing database tables:', error);
+        console.error('Error initializing database tables:', error);
+        return false;
+    }
+}
+
+// Start the server and initialize the database
+async function startServer() {
+    try {
+        // Initialize database tables when server starts
+        await initializeDatabaseTables();
+        
+        /* 
+        // Commenting out data synchronization to prevent infinite SQL statements
+        console.log('Starting data synchronization...');
+        const syncResult = await dataSyncService.fullSyncStocks();
+        console.log('Data synchronization result:', syncResult.message);
+        */
+        
+        // Start data generation for WebSocket updates
+        startDataGenerationThread();
+        
+        // Start suspicious activity monitoring
+        await SuspiciousActivityMonitor.start();
+        console.log('🔍 Suspicious activity monitoring system started');
+        
+        // Start the server
+        server.listen(PORT, () => {
+            console.log(`🚀 Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
     }
 }
 
 // Start the server
-server.listen(PORT, async () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    
-    // Initialize database tables when server starts
-    await initializeDatabaseTables();
-    
-    // Start data generation for WebSocket updates
-    startDataGenerationThread();
-});
+startServer();
 
 

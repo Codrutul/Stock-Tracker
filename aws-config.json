@@ -1,0 +1,32 @@
+[
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "DATABASE_URL",
+    "Value": "postgresql://postgres:sgdsg09659@${RDS_HOSTNAME}:${RDS_PORT}/${RDS_DB_NAME}"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "JWT_SECRET",
+    "Value": "stocktracker-secure-jwt-secret-for-auth"
+  },
+  {
+    "Namespace": "aws:autoscaling:launchconfiguration",
+    "OptionName": "InstanceType",
+    "Value": "t2.micro"
+  },
+  {
+    "Namespace": "aws:autoscaling:asg",
+    "OptionName": "MinSize",
+    "Value": "1"
+  },
+  {
+    "Namespace": "aws:autoscaling:asg",
+    "OptionName": "MaxSize",
+    "Value": "3"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:environment",
+    "OptionName": "EnvironmentType",
+    "Value": "LoadBalanced"
+  }
+] 

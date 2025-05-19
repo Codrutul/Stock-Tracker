@@ -30,13 +30,51 @@ const validIndustries = [
 ];
 
 /**
+ * Get authentication token from localStorage
+ */
+export const getAuthToken = (): string | null => {
+    return localStorage.getItem('token');
+};
+
+/**
+ * Get standard headers including auth token if available
+ * This function is exported for use in other API clients
+ */
+export const authHeaders = (): HeadersInit => {
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+    };
+
+    const token = getAuthToken();
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+};
+
+/**
  * API client for interacting with the backend
  */
 export const stockApi = {
     /**
+     * Get authentication token from localStorage
+     */
+    _getAuthToken: (): string | null => {
+        return getAuthToken();
+    },
+
+    /**
+     * Get standard headers including auth token if available
+     */
+    _getAuthHeaders: (): HeadersInit => {
+        return authHeaders();
+    },
+
+    /**
      * Log API request details
      */
-    _logRequest: (method: string, url: string, body?: any) => {
+    _logRequest: (method: string, url: string, body?: unknown) => {
         console.log(`📡 API REQUEST: ${method.toUpperCase()} ${url}`);
         if (body) {
             console.log('📦 Request Payload:', JSON.stringify(body, null, 2));
@@ -47,7 +85,7 @@ export const stockApi = {
     /**
      * Log API response details
      */
-    _logResponse: (startTime: number, response: Response, data: any) => {
+    _logResponse: (startTime: number, response: Response, data: unknown) => {
         const duration = Date.now() - startTime;
         console.log(`📡 API RESPONSE: ${response.status} ${response.statusText} [${duration}ms]`);
         
@@ -72,14 +110,21 @@ export const stockApi = {
         const reqLog = stockApi._logRequest('GET', url);
         
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: stockApi._getAuthHeaders()
+            });
+            
             if (!response.ok) {
                 throw new Error(`Error: ${response.status}`);
             }
+            
             const data = await response.json();
             stockApi._logResponse(reqLog.startTime, response, data);
             
-            return data.map((stock: StockDTO) => new Stock(
+            // Check if response is wrapped in a data property (pagination format)
+            const stocksData = data.data || data;
+            
+            return stocksData.map((stock: StockDTO) => new Stock(
                 stock.name,
                 stock.price,
                 stock.amount_owned,
@@ -102,7 +147,10 @@ export const stockApi = {
      */
     getStockByName: async (name: string): Promise<Stock | null> => {
         try {
-            const response = await fetch(`${API_URL}/stocks/${name}`);
+            const response = await fetch(`${API_URL}/stocks/${name}`, {
+                headers: stockApi._getAuthHeaders()
+            });
+            
             if (response.status === 404) {
                 return null;
             }
@@ -152,9 +200,7 @@ export const stockApi = {
             
             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: stockApi._getAuthHeaders(),
                 body: JSON.stringify(stockData),
             });
             
@@ -164,7 +210,7 @@ export const stockApi = {
                     const errorData = await response.json();
                     errorMessage = errorData.message || errorMessage;
                     console.error('❌ API Error:', errorData);
-                } catch (e) {
+                } catch {
                     // If response is not JSON, use the status text
                     errorMessage = response.statusText || errorMessage;
                     console.error('❌ API Error (non-JSON):', errorMessage);
@@ -200,9 +246,7 @@ export const stockApi = {
         try {
             const response = await fetch(`${API_URL}/stocks/${name}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: stockApi._getAuthHeaders(),
                 body: JSON.stringify(stock),
             });
             
@@ -211,7 +255,7 @@ export const stockApi = {
                 try {
                     const errorData = await response.json();
                     errorMessage = errorData.message || errorMessage;
-                } catch (e) {
+                } catch {
                     // If response is not JSON, use the status text
                     errorMessage = response.statusText || errorMessage;
                 }
@@ -244,6 +288,7 @@ export const stockApi = {
         try {
             const response = await fetch(`${API_URL}/stocks/${name}`, {
                 method: 'DELETE',
+                headers: stockApi._getAuthHeaders(),
             });
             
             if (!response.ok) {
@@ -251,7 +296,7 @@ export const stockApi = {
                 try {
                     const errorData = await response.json();
                     errorMessage = errorData.message || errorMessage;
-                } catch (e) {
+                } catch {
                     // If response is not JSON, use the status text
                     errorMessage = response.statusText || errorMessage;
                 }
@@ -270,12 +315,20 @@ export const stockApi = {
      */
     getStocksByIndustry: async (industry: string): Promise<Stock[]> => {
         try {
-            const response = await fetch(`${API_URL}/stocks/filter/industry/${industry}`);
+            const response = await fetch(`${API_URL}/stocks/filter/industry/${industry}`, {
+                headers: stockApi._getAuthHeaders()
+            });
+            
             if (!response.ok) {
                 throw new Error(`Error: ${response.status}`);
             }
+            
             const data = await response.json();
-            return data.map((stock: StockDTO) => new Stock(
+            
+            // Check if response is wrapped in a data property (pagination format)
+            const stocksData = data.data || data;
+            
+            return stocksData.map((stock: StockDTO) => new Stock(
                 stock.name,
                 stock.price,
                 stock.amount_owned,
@@ -298,12 +351,20 @@ export const stockApi = {
      */
     getStocksByPriceRange: async (min: number, max: number): Promise<Stock[]> => {
         try {
-            const response = await fetch(`${API_URL}/stocks/filter/price?min=${min}&max=${max}`);
+            const response = await fetch(`${API_URL}/stocks/filter/price?min=${min}&max=${max}`, {
+                headers: stockApi._getAuthHeaders()
+            });
+            
             if (!response.ok) {
                 throw new Error(`Error: ${response.status}`);
             }
+            
             const data = await response.json();
-            return data.map((stock: StockDTO) => new Stock(
+            
+            // Check if response is wrapped in a data property (pagination format)
+            const stocksData = data.data || data;
+            
+            return stocksData.map((stock: StockDTO) => new Stock(
                 stock.name,
                 stock.price,
                 stock.amount_owned,
@@ -326,12 +387,20 @@ export const stockApi = {
      */
     getSortedStocks: async (sortBy: string): Promise<Stock[]> => {
         try {
-            const response = await fetch(`${API_URL}/stocks/sort/${sortBy}`);
+            const response = await fetch(`${API_URL}/stocks/sort/${sortBy}`, {
+                headers: stockApi._getAuthHeaders()
+            });
+            
             if (!response.ok) {
                 throw new Error(`Error: ${response.status}`);
             }
+            
             const data = await response.json();
-            return data.map((stock: StockDTO) => new Stock(
+            
+            // Check if response is wrapped in a data property (pagination format)
+            const stocksData = data.data || data;
+            
+            return stocksData.map((stock: StockDTO) => new Stock(
                 stock.name,
                 stock.price,
                 stock.amount_owned,
@@ -358,9 +427,7 @@ export const stockApi = {
             
             const response = await fetch(`${API_URL}/stocks/${name}/amount`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: stockApi._getAuthHeaders(),
                 body: JSON.stringify({ amount_owned: amount }),
             });
             
@@ -372,7 +439,7 @@ export const stockApi = {
                     const errorData = await response.json();
                     errorMessage = errorData.message || errorMessage;
                     console.error('❌ API Error:', errorData);
-                } catch (e) {
+                } catch {
                     // If response is not JSON, use the status text
                     errorMessage = response.statusText || errorMessage;
                     console.error('❌ API Error (non-JSON):', errorMessage);
@@ -435,17 +502,24 @@ export const stockApi = {
                     sortParam = 'name';
             }
             
+            // Set sort direction (default to DESC for price and marketCap, ASC for others)
+            const sortDirection = sortParam === 'price' || sortParam === 'marketCap' || sortParam === 'amount_owned' 
+                ? 'DESC' : 'ASC';
+            
             // Build query string
             const params = new URLSearchParams();
             if (industry && industry !== 'All') params.append('industry', industry);
             params.append('min', priceMin.toString());
             params.append('max', priceMax.toString());
             params.append('sortBy', sortParam);
+            params.append('direction', sortDirection);
             
             const url = `${API_URL}/stocks/filteredAndSorted?${params.toString()}`;
             console.log(`📡 Sending GET request to ${url}`);
             
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: stockApi._getAuthHeaders()
+            });
             
             console.log(`📥 Response status: ${response.status} ${response.statusText}`);
             
@@ -455,7 +529,7 @@ export const stockApi = {
                     const errorData = await response.json();
                     errorMessage = errorData.message || errorMessage;
                     console.error('❌ API Error:', errorData);
-                } catch (e) {
+                } catch {
                     errorMessage = response.statusText || errorMessage;
                     console.error('❌ API Error (non-JSON):', errorMessage);
                 }
@@ -463,9 +537,25 @@ export const stockApi = {
             }
             
             const data = await response.json();
-            console.log(`✅ API - Received ${data.length} filtered and sorted stocks`);
             
-            return data.map((stock: StockDTO) => new Stock(
+            // Debug the response structure
+            console.log('📊 Response data structure:', Object.keys(data));
+            if (data.data) {
+                console.log(`✅ API - Received ${data.data.length} filtered and sorted stocks`);
+            } else {
+                console.log(`✅ API - Received data without pagination wrapper:`, 
+                    Array.isArray(data) ? `Array with ${data.length} items` : 'Not an array');
+            }
+            
+            // Check if data is wrapped in a data property (pagination format)
+            const stocksData = data.data || data;
+            
+            if (!Array.isArray(stocksData)) {
+                console.error('❌ API Error: Expected array of stocks, got:', stocksData);
+                return [];
+            }
+            
+            return stocksData.map((stock: StockDTO) => new Stock(
                 stock.name,
                 stock.price,
                 stock.amount_owned,
@@ -488,9 +578,9 @@ export const stockApi = {
      */
     pingServer: async (): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_URL}/health`);
+            const response = await fetch(`${API_URL}/ping`);
             return response.ok;
-        } catch (error) {
+        } catch {
             return false;
         }
     }

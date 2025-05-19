@@ -23,6 +23,22 @@ module.exports = (sequelize) => {
             validate: {
                 isEmail: true
             }
+        },
+        password: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            validate: {
+                notEmpty: true,
+                len: [8, 100] // Min length of 8 characters
+            }
+        },
+        role: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'regular',
+            validate: {
+                isIn: [['regular', 'admin']]
+            }
         }
     }, {
         tableName: 'users',

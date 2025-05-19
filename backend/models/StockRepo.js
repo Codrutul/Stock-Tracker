@@ -1,5 +1,6 @@
 const Stock = require('./Stock');
 const pool = require('../db');
+const { StockModel } = require('./sequelize');
 
 class StockRepo {
     constructor() {
@@ -197,12 +198,25 @@ class StockRepo {
     // Add a new stock
     async addStock(stock) {
         try {
+            console.log(`🔄 StockRepo: Attempting to add stock: ${stock.name}`);
+            
             // Sanitize the stock data to ensure numeric values are valid
             const sanitizedStock = this.sanitizeNumericValues(stock);
             
             const { name, price, amount_owned, change, image_src, marketCap, 
                 dividendAmount, industry, headquarters, peRatio } = sanitizedStock;
             
+            console.log(`📊 StockRepo: Sanitized values for ${name}:`);
+            console.log(`  - price: ${price}`);
+            console.log(`  - amount_owned: ${amount_owned}`);
+            console.log(`  - change: ${change}`);
+            console.log(`  - marketCap: ${marketCap}`);
+            console.log(`  - dividendAmount: ${dividendAmount}`);
+            console.log(`  - industry: ${industry}`);
+            console.log(`  - headquarters: ${headquarters}`);
+            console.log(`  - peRatio: ${peRatio}`);
+            
+            // Insert into raw SQL database
             const result = await pool.query(
                 `INSERT INTO ${this.tableName} 
                 (name, price, amount_owned, change, image_src, marketCap, 
@@ -213,24 +227,81 @@ class StockRepo {
                 dividendAmount, industry, headquarters, peRatio]
             );
             
+            // Also insert into Sequelize model for persistence
+            try {
+                await StockModel.findOrCreate({
+                    where: { name },
+                    defaults: {
+                        price,
+                        amount_owned,
+                        change,
+                        image_src,
+                        marketCap,
+                        dividendAmount,
+                        industry,
+                        headquarters,
+                        peRatio
+                    }
+                });
+                console.log(`✅ StockRepo: Synchronized stock with Sequelize: ${name}`);
+            } catch (seqError) {
+                console.error(`❌ StockRepo: Error syncing with Sequelize for ${name}:`, seqError);
+                // Continue anyway since we have the raw SQL insertion
+            }
+            
+            if (result.rows.length === 0) {
+                console.log(`❌ StockRepo: No data returned after inserting stock: ${name}`);
+                return null;
+            }
+            
+            console.log(`✅ StockRepo: Successfully added stock: ${name}`);
             return result.rows[0];
         } catch (error) {
-            console.error('Error adding stock:', error);
-            // Add to in-memory data if database fails
-            const newStock = new Stock(
-                stock.name,
-                stock.price,
-                stock.amount_owned,
-                stock.change,
-                stock.image_src,
-                stock.marketCap,
-                stock.dividendAmount,
-                stock.industry,
-                stock.headquarters,
-                stock.peRatio
-            );
-            this.data.push(newStock);
-            return newStock;
+            console.error(`❌ StockRepo: Error adding stock ${stock.name}:`, error);
+            console.log(`🔄 StockRepo: Falling back to in-memory data for: ${stock.name}`);
+            
+            try {
+                // Add to in-memory data if database fails
+                const newStock = new Stock(
+                    stock.name,
+                    stock.price,
+                    stock.amount_owned,
+                    stock.change,
+                    stock.image_src,
+                    stock.marketCap,
+                    stock.dividendAmount,
+                    stock.industry,
+                    stock.headquarters,
+                    stock.peRatio
+                );
+                
+                this.data.push(newStock);
+                console.log(`✅ StockRepo: Successfully added stock to in-memory data: ${stock.name}`);
+                
+                // Try adding to Sequelize as a last resort
+                try {
+                    await StockModel.create({
+                        name: stock.name,
+                        price: stock.price,
+                        amount_owned: stock.amount_owned,
+                        change: stock.change,
+                        image_src: stock.image_src,
+                        marketCap: stock.marketCap,
+                        dividendAmount: stock.dividendAmount,
+                        industry: stock.industry,
+                        headquarters: stock.headquarters,
+                        peRatio: stock.peRatio
+                    });
+                    console.log(`✅ StockRepo: Added to Sequelize as fallback for: ${stock.name}`);
+                } catch (seqError) {
+                    console.error(`❌ StockRepo: Sequelize fallback also failed for ${stock.name}:`, seqError);
+                }
+                
+                return newStock;
+            } catch (inMemoryError) {
+                console.error(`❌ StockRepo: Error adding stock to in-memory data: ${stock.name}`, inMemoryError);
+                throw new Error(`Failed to add stock to database or in-memory: ${error.message}`);
+            }
         }
     }
 
@@ -274,6 +345,25 @@ class StockRepo {
             
             const result = await pool.query(query, [name, ...values]);
             
+            // Also update Sequelize model for persistence
+            try {
+                const stockInSequelize = await StockModel.findByPk(name);
+                if (stockInSequelize) {
+                    await stockInSequelize.update(sanitizedData);
+                    console.log(`✅ StockRepo: Synchronized update with Sequelize: ${name}`);
+                } else {
+                    // If it doesn't exist in Sequelize, create it
+                    await StockModel.create({
+                        name,
+                        ...sanitizedData
+                    });
+                    console.log(`✅ StockRepo: Created in Sequelize during update: ${name}`);
+                }
+            } catch (seqError) {
+                console.error(`❌ StockRepo: Error syncing update with Sequelize for ${name}:`, seqError);
+                // Continue anyway since we have the raw SQL update
+            }
+            
             if (result.rows.length === 0) {
                 return null;
             }
@@ -285,6 +375,18 @@ class StockRepo {
             const stockIndex = this.data.findIndex(stock => stock.name === name);
             if (stockIndex !== -1) {
                 Object.assign(this.data[stockIndex], stockData);
+                
+                // Try updating Sequelize as a last resort
+                try {
+                    await StockModel.upsert({
+                        name,
+                        ...stockData
+                    });
+                    console.log(`✅ StockRepo: Updated Sequelize as fallback for: ${name}`);
+                } catch (seqError) {
+                    console.error(`❌ StockRepo: Sequelize update fallback failed for ${name}:`, seqError);
+                }
+                
                 return this.data[stockIndex];
             }
             return null;
@@ -322,26 +424,65 @@ class StockRepo {
     // Delete a stock by name
     async deleteStock(name) {
         try {
+            console.log(`🔄 StockRepo: Attempting to delete stock from database: ${name}`);
+            
+            // First verify the stock exists
+            const exists = await this.stockExists(name);
+            if (!exists) {
+                console.log(`❌ StockRepo: Stock does not exist: ${name}`);
+                return null;
+            }
+            
             const result = await pool.query(
                 `DELETE FROM ${this.tableName} WHERE name = $1 RETURNING *`,
                 [name]
             );
             
+            // Also delete from Sequelize model for consistency
+            try {
+                await StockModel.destroy({
+                    where: { name }
+                });
+                console.log(`✅ StockRepo: Synchronized deletion with Sequelize: ${name}`);
+            } catch (seqError) {
+                console.error(`❌ StockRepo: Error syncing deletion with Sequelize for ${name}:`, seqError);
+                // Continue anyway since we have the raw SQL deletion
+            }
+            
             if (result.rows.length === 0) {
+                console.log(`❌ StockRepo: No rows deleted for stock: ${name}`);
                 return null;
             }
             
+            console.log(`✅ StockRepo: Successfully deleted stock: ${name}`);
             return this.sanitizeNumericValues(result.rows[0]);
         } catch (error) {
-            console.error('Error deleting stock:', error);
-            // Delete from in-memory data if database fails
+            console.error(`❌ StockRepo: Error deleting stock ${name}:`, error);
+            
+            // Attempt to fall back to in-memory data
+            console.log(`🔄 StockRepo: Attempting in-memory fallback for delete operation on: ${name}`);
             const stockIndex = this.data.findIndex(stock => stock.name === name);
+            
             if (stockIndex !== -1) {
                 const deletedStock = this.data[stockIndex];
                 this.data.splice(stockIndex, 1);
+                console.log(`✅ StockRepo: Successfully deleted stock from in-memory data: ${name}`);
+                
+                // Try deleting from Sequelize as a last resort
+                try {
+                    await StockModel.destroy({
+                        where: { name }
+                    });
+                    console.log(`✅ StockRepo: Deleted from Sequelize as fallback for: ${name}`);
+                } catch (seqError) {
+                    console.error(`❌ StockRepo: Sequelize deletion fallback failed for ${name}:`, seqError);
+                }
+                
                 return deletedStock;
             }
-            return null;
+            
+            console.log(`❌ StockRepo: In-memory fallback also failed for stock: ${name}`);
+            throw new Error(`Failed to delete stock: ${error.message}`);
         }
     }
 
@@ -392,7 +533,8 @@ class StockRepo {
             const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'name';
             
             // Validate sort direction
-            const direction = (sortDirection.toUpperCase() === 'DESC') ? 'DESC' : 'ASC';
+            const direction = (sortDirection && sortDirection.toUpperCase() === 'DESC') ? 'DESC' : 'ASC';
+            console.log(`🔄 StockRepo: Sorting by ${sortColumn} in ${direction} order`);
             
             // Add sorting
             query += ` ORDER BY ${sortColumn} ${direction}`;
