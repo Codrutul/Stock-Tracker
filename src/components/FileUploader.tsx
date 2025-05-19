@@ -83,6 +83,9 @@ export default function FileUploader({
       const formData = new FormData();
       formData.append('file', file);
       
+      // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      
       // Create an AJAX request to track upload progress
       const xhr = new XMLHttpRequest();
       
@@ -93,6 +96,9 @@ export default function FileUploader({
           setUploadProgress(percentComplete);
         }
       };
+      
+      xhr.open('POST', `${baseUrl}/api/files/upload`, true);
+      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`); // Add auth token
       
       // Create a promise to handle the XHR response
       const uploadPromise = new Promise<FileInfo>((resolve, reject) => {
@@ -116,7 +122,6 @@ export default function FileUploader({
       });
       
       // Open the request and send the form data
-      xhr.open('POST', 'http://localhost:5001/api/files/upload', true);
       xhr.send(formData);
       
       // Wait for upload to complete

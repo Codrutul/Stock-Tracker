@@ -22,11 +22,11 @@ interface AuthContextType {
   isAdmin: boolean;
 }
 
+// TODO: Use environment variables for API_URL
+const API_URL = `${import.meta.env.VITE_API_URL}/api`;
+
 // Create the auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Define API base URL
-const API_URL = 'http://localhost:5001/api';
 
 // Provider component
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

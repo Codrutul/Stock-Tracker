@@ -12,6 +12,7 @@ const UserProfile: React.FC = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'error' | 'success' | 'info'>('error');
   const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Redirect if not authenticated
   if (!user || !token) {
@@ -38,7 +39,10 @@ const UserProfile: React.FC = () => {
     }
     
     try {
-      const response = await fetch('http://localhost:5001/api/auth/change-password', {
+      setLoading(true);
+      // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const response = await fetch(`${baseUrl}/api/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -66,6 +70,8 @@ const UserProfile: React.FC = () => {
       setNotificationMessage(error instanceof Error ? error.message : 'An unknown error occurred');
       setNotificationType('error');
       setShowNotification(true);
+    } finally {
+      setLoading(false);
     }
   };
 

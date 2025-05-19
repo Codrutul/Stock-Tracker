@@ -43,10 +43,12 @@ export default function FileList({
       setLoading(true);
       setError(null);
       
-      const response = await fetch('http://localhost:5001/api/files');
+      // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const response = await fetch(`${baseUrl}/api/files`);
       
       if (!response.ok) {
-        throw new Error(`Error fetching files: ${response.status}`);
+        throw new Error('Failed to fetch files');
       }
       
       const data = await response.json();
@@ -61,31 +63,41 @@ export default function FileList({
   
   // Delete a file
   const handleDeleteFile = async (fileName: string) => {
-    try {
-      const response = await fetch(`http://localhost:5001/api/files/${fileName}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error deleting file: ${response.status}`);
+    if (window.confirm(`Are you sure you want to delete ${fileName}?`)) {
+      try {
+        // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+        const response = await fetch(`${baseUrl}/api/files/${fileName}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error deleting file: ${response.status}`);
+        }
+        
+        // Remove the file from the list
+        setFiles(files.filter(file => file.fileName !== fileName));
+        
+        // Notify parent component
+        if (onFileDelete) {
+          onFileDelete(fileName);
+        }
+      } catch (err) {
+        console.error('Error deleting file:', err);
+        setError(err instanceof Error ? err.message : 'Failed to delete file');
       }
-      
-      // Remove the file from the list
-      setFiles(files.filter(file => file.fileName !== fileName));
-      
-      // Notify parent component
-      if (onFileDelete) {
-        onFileDelete(fileName);
-      }
-    } catch (err) {
-      console.error('Error deleting file:', err);
-      setError(err instanceof Error ? err.message : 'Failed to delete file');
     }
   };
   
   // Download a file
   const handleDownloadFile = (fileName: string, url: string) => {
-    window.open(`http://localhost:5001${url}`, '_blank');
+    if (url) {
+      // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      window.open(`${baseUrl}${url}`, '_blank');
+    } else {
+      console.error("Download URL is undefined or empty");
+    }
   };
   
   // Fetch files when the component mounts or refreshTrigger changes

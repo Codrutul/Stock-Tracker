@@ -1,7 +1,7 @@
 import Stock from '../classes/Stock';
 import { faker } from '@faker-js/faker';
 
-const API_URL = 'http://localhost:5001/api';
+const API_URL = `${import.meta.env.VITE_API_URL}/api`;
 
 // Interface for stock data from API
 interface StockDTO {
