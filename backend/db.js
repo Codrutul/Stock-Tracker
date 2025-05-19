@@ -73,7 +73,7 @@ pool.on('connect', async () => {
         await testConnection();
         
         // Sync Sequelize models
-        await syncModels(false); // Set to true to force recreate tables (will drop existing data)
+        await syncModels(true); // Set to true to force recreate tables (will drop existing data)
         
         // Synchronize existing data between PostgreSQL and Sequelize
         await syncExistingData();
