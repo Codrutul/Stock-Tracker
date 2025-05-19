@@ -5,7 +5,7 @@ const { encrypt, decrypt } = require('../utils/cryptoUtil');
 
 class TwoFactorService {
     constructor() {
-        this.appName = 'StockTrackerApp'; // Or your application's name
+        this.appName = 'StockTracker'; // Or your application's name
     }
 
     generateSecret() {
