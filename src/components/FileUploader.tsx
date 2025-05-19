@@ -84,7 +84,8 @@ export default function FileUploader({
       formData.append('file', file);
       
       // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const baseUrl = rawBaseUrl.replace(/\/$/, ''); // Remove trailing slash
       
       // Create an AJAX request to track upload progress
       const xhr = new XMLHttpRequest();

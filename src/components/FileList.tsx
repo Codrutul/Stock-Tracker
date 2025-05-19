@@ -44,7 +44,8 @@ export default function FileList({
       setError(null);
       
       // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const baseUrl = rawBaseUrl.replace(/\/$/, ''); // Remove trailing slash
       const response = await fetch(`${baseUrl}/api/files`);
       
       if (!response.ok) {
@@ -66,7 +67,8 @@ export default function FileList({
     if (window.confirm(`Are you sure you want to delete ${fileName}?`)) {
       try {
         // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+        const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+        const baseUrl = rawBaseUrl.replace(/\/$/, ''); // Remove trailing slash
         const response = await fetch(`${baseUrl}/api/files/${fileName}`, {
           method: 'DELETE'
         });
@@ -93,7 +95,8 @@ export default function FileList({
   const handleDownloadFile = (fileName: string, url: string) => {
     if (url) {
       // Ensure VITE_API_URL is defined, or provide a fallback for local dev if necessary
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001'; 
+      const baseUrl = rawBaseUrl.replace(/\/$/, ''); // Remove trailing slash
       window.open(`${baseUrl}${url}`, '_blank');
     } else {
       console.error("Download URL is undefined or empty");

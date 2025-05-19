@@ -1,7 +1,8 @@
 import { authHeaders } from './api';
 
 // API base URL (should match your backend)
-const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
+const VITE_API_URL_CLEAN = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const API_BASE_URL = `${VITE_API_URL_CLEAN}/api`;
 
 // Define interfaces for the monitoring API
 interface MonitoredUser {

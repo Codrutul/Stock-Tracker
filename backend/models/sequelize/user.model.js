@@ -39,6 +39,19 @@ module.exports = (sequelize) => {
             validate: {
                 isIn: [['regular', 'admin']]
             }
+        },
+        two_factor_secret: {
+            type: DataTypes.STRING, // Encrypted secret
+            allowNull: true
+        },
+        is_two_factor_enabled: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+            defaultValue: false
+        },
+        two_factor_recovery_codes: { // Array of encrypted recovery codes
+            type: DataTypes.JSON,
+            allowNull: true
         }
     }, {
         tableName: 'users',

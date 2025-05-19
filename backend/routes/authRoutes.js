@@ -12,4 +12,14 @@ router.post('/login', authController.login);
 router.get('/profile', authenticateToken, authController.getProfile);
 router.post('/change-password', authenticateToken, authController.changePassword);
 
+// --- 2FA Routes ---
+// Initiate 2FA setup (generates QR code and secret)
+router.post('/2fa/setup', authenticateToken, authController.setupTwoFactor);
+
+// Verify token and enable 2FA
+router.post('/2fa/verify', authenticateToken, authController.verifyAndEnableTwoFactor);
+
+// Disable 2FA
+router.post('/2fa/disable', authenticateToken, authController.disableTwoFactor);
+
 module.exports = router; 
