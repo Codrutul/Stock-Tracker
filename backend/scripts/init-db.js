@@ -65,12 +65,21 @@ async function initializeDatabase() {
     try {
         console.log('🔄 Starting database initialization...');
         
-        // Sync models (force true to drop existing tables)
-        await syncModels(true);
-        console.log('✅ Database schema synchronized');
+        // Sync models (force false to NOT drop existing tables)
+        await syncModels(false);
+        console.log('✅ Database schema synchronized (non-destructive)');
+
+        // Check if data already exists to prevent re-seeding
+        // We'll check if the UserModel has any entries. If so, assume DB is seeded.
+        const existingUser = await UserModel.findOne();
+        if (existingUser) {
+            console.log('ℹ️ Data already seems to exist (found a user). Skipping seeding process.');
+            await sequelize.close(); // Still close the connection
+            return; // Exit if data is likely already there
+        }
         
         // Create users
-        console.log('🔄 Creating users...');
+        console.log('🔄 Creating users (database appears to be empty)...');
         const createdUsers = await UserModel.bulkCreate(users);
         console.log(`✅ Created ${createdUsers.length} users`);
         

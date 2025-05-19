@@ -79,7 +79,7 @@ class SuspiciousActivityMonitor {
                     ARRAY_AGG(DISTINCT activity_type) as activity_types,
                     MAX(created_at) as latest_activity
                 FROM user_activity_logs
-                WHERE created_at > NOW() - INTERVAL $1
+                WHERE created_at > NOW() - $1::interval
                 GROUP BY user_id
                 HAVING COUNT(*) >= $2
             `, [this.timeWindow, this.activityThreshold]);
@@ -167,7 +167,7 @@ class SuspiciousActivityMonitor {
                 const activityResult = await pool.query(`
                     SELECT COUNT(*) as count 
                     FROM user_activity_logs 
-                    WHERE user_id = $1 AND created_at > NOW() - INTERVAL $2
+                    WHERE user_id = $1 AND created_at > NOW() - $2::interval
                 `, [user.user_id, this.timeWindow]);
                 
                 const recentActivityCount = parseInt(activityResult.rows[0].count);
