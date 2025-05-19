@@ -1,3 +1,4 @@
+console.log('INFO: backend/routes/authRoutes.js - Script loaded at', new Date().toISOString());
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');

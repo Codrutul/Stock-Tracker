@@ -1,3 +1,4 @@
+console.log('INFO: backend/server.js - Script loaded at', new Date().toISOString());
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -34,12 +35,14 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // Middleware
+console.log('INFO: backend/server.js - Core middleware (cors, json, urlencoded) setup complete.');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Enhanced Request logging middleware
 app.use((req, res, next) => {
+    console.log(`INFO: backend/server.js - Incoming request: ${req.method} ${req.url}`); // Log every incoming request
     const start = Date.now();
     const requestId = Math.random().toString(36).substring(2, 15);
     
@@ -176,6 +179,7 @@ wss.on('connection', (ws) => {
 });
 
 // Routes
+console.log('INFO: backend/server.js - Setting up routes...');
 app.use('/api/stocks', stockRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/users', userRoutes);

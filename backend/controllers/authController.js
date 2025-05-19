@@ -20,6 +20,7 @@ const generateToken = (user) => {
 
 // Register a new user
 exports.register = async (req, res) => {
+    console.log(`INFO: backend/controllers/authController.js - register function called for user: ${req.body.username} at ${new Date().toISOString()}`);
     try {
         const { username, email, password, role } = req.body;
         
