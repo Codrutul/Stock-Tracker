@@ -57,10 +57,10 @@ class StockRepo {
                 ON ${this.tableName}(price)
             `);
             
-            // Create index on marketCap for faster sorting
+            // Create index on market_cap for faster sorting (column is snake_case due to Sequelize underscored: true)
             await pool.query(`
                 CREATE INDEX IF NOT EXISTS idx_stocks_market_cap 
-                ON ${this.tableName}(marketCap)
+                ON ${this.tableName}(market_cap)
             `);
             
             console.log('Stock table indexes created');
